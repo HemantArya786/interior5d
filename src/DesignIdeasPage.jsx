@@ -1,680 +1,568 @@
-// The exported code uses Tailwind CSS. Install Tailwind CSS in your dev environment to ensure all styles work.
-import React, { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Slider } from "@/components/ui/slider";
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Link } from "react-router-dom";
-const DesignIdeas = () => {
-  const [zipCode, setZipCode] = useState("");
-  const [locationFilter, setLocationFilter] = useState("");
-  const [radius, setRadius] = useState(25);
-  const [showFilters, setShowFilters] = useState(false);
-  const [messageModal, setMessageModal] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState(null);
-  const [messageContent, setMessageContent] = useState("");
-  const [attachments, setAttachments] = useState(null);
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
+import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useVendors } from './hooks/useApi';
+import { apiUtils, messageAPI } from './services/api';
 
-  const handleSendMessage = (providerId) => {
-    const provider = serviceProviders.find((p) => p.id === providerId);
-    setSelectedProvider(provider);
-    setMessageModal(true);
-  };
+const DesignIdeasPage = () => {
+	const [searchParams, setSearchParams] = useSearchParams();
+	const [zipCode, setZipCode] = useState('');
+	const [locationFilter, setLocationFilter] = useState(
+		searchParams.get('location') || ''
+	);
+	const [messageModal, setMessageModal] = useState(false);
+	const [selectedProvider, setSelectedProvider] = useState(null);
+	const [messageContent, setMessageContent] = useState('');
+	const [currentPage, setCurrentPage] = useState(1);
+	const [selectedCategories, setSelectedCategories] = useState(
+		searchParams.get('categories')
+			? searchParams.get('categories').split(',')
+			: []
+	);
+	const [selectedProfession, setSelectedProfession] = useState(
+		searchParams.get('profession') || ''
+	);
+	const [sendingMessage, setSendingMessage] = useState(false);
 
-  const handleSubmitMessage = () => {
-    // Here you would typically send the message to your backend
-    console.log("Sending message to:", selectedProvider?.name);
-    console.log("Message:", messageContent);
-    console.log("Attachments:", attachments);
+	// API call with filters
+	const vendorParams = {
+		page: currentPage,
+		limit: 10,
+		city: locationFilter || undefined,
+		professionType: selectedProfession || undefined,
+		categories:
+			selectedCategories.length > 0 ? selectedCategories.join(',') : undefined,
+		zipcode: zipCode || undefined,
+	};
 
-    // Reset form and close modal
-    setMessageContent("");
-    setAttachments(null);
-    setMessageModal(false);
-  };
-  // Sample service providers data
-  const serviceProviders = [
-    {
-      id: 1,
-      name: "Sharma Home Solutions",
-      rating: 4.8,
-      reviews: 127,
-      description:
-        "Professional home renovation and repair services with over 15 years of experience. Specializing in kitchen remodels, bathroom upgrades, and general home improvements.",
-      address: "1234 Main Street, Seattle, WA",
-      imageUrl:
-        "https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg?_gl=1*1p8fe40*_ga*MTY3NjY1NjY5Mi4xNzUwNTE5NjUw*_ga_8JE65Q40S6*czE3NTE1NDMzNzckbzIkZzEkdDE3NTE1NDM0NDUkajU1JGwwJGgw",
-    },
-    {
-      id: 2,
-      name: "GreenLeaf Landscaping Services",
-      rating: 4.9,
-      reviews: 215,
-      description:
-        "Complete landscaping solutions for residential and commercial properties. Our team creates beautiful outdoor spaces that enhance your property value and enjoyment.",
-      address: "567 Garden Ave, Portland, OR",
-      imageUrl:
-        "https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg?_gl=1*1p8fe40*_ga*MTY3NjY1NjY5Mi4xNzUwNTE5NjUw*_ga_8JE65Q40S6*czE3NTE1NDMzNzckbzIkZzEkdDE3NTE1NDM0NDUkajU1JGwwJGgw",
-    },
-    {
-      id: 3,
-      name: "Patel Plumbing Works",
-      rating: 4.6,
-      reviews: 156,
-      description:
-        "24/7 emergency plumbing services with licensed and insured professionals. From minor repairs to major installations, we handle all your plumbing needs.",
-      address: "432 Water Way, Denver, CO",
-      imageUrl:
-        "https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg?_gl=1*1p8fe40*_ga*MTY3NjY1NjY5Mi4xNzUwNTE5NjUw*_ga_8JE65Q40S6*czE3NTE1NDMzNzckbzIkZzEkdDE3NTE1NDM0NDUkajU1JGwwJGgw",
-    },
-    {
-      id: 4,
-      name: "Verma Paint & Decor",
-      rating: 4.7,
-      reviews: 142,
-      description:
-        "Interior and exterior painting services with attention to detail. We transform spaces with premium paints and expert application techniques.",
-      address: "321 Color Lane, Chicago, IL",
-      imageUrl:
-        "https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg?_gl=1*1p8fe40*_ga*MTY3NjY1NjY5Mi4xNzUwNTE5NjUw*_ga_8JE65Q40S6*czE3NTE1NDMzNzckbzIkZzEkdDE3NTE1NDM0NDUkajU1JGwwJGgw",
-    },
-    {
-      id: 5,
-      name: "Elegant Living Interiors",
-      rating: 4.9,
-      reviews: 198,
-      description:
-        "Specializing in luxury interior design for homes and apartments. From space planning to final styling, we deliver customized, elegant living experiences.",
-      address: "45 MG Road, Bengaluru, KA",
-      imageUrl:
-        "https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg?_gl=1*1p8fe40*_ga*MTY3NjY1NjY5Mi4xNzUwNTE5NjUw*_ga_8JE65Q40S6*czE3NTE1NDMzNzckbzIkZzEkdDE3NTE1NDM0NDUkajU1JGwwJGgw",
-    },
-    {
-      id: 6,
-      name: "ModSpace Modular Interiors",
-      rating: 4.8,
-      reviews: 174,
-      description:
-        "Experts in modular kitchens, wardrobes, and smart storage solutions. Our modern interior concepts blend form and function to suit urban lifestyles.",
-      address: "101 Sector 62, Noida, UP",
-      imageUrl:
-        "https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg?_gl=1*1p8fe40*_ga*MTY3NjY1NjY5Mi4xNzUwNTE5NjUw*_ga_8JE65Q40S6*czE3NTE1NDMzNzckbzIkZzEkdDE3NTE1NDM0NDUkajU1JGwwJGgw",
-    },
-  ];
+	const {
+		data: vendorsData,
+		loading,
+		error,
+		refetch,
+	} = useVendors(vendorParams);
 
-  // Indian service categories
-  const categories = [
-    "Landscaping",
-    "Painting",
-    "Flooring & Tiling",
-    "Roof Waterproofing",
-    "HVAC Installation",
-    "Interior Design",
-    "Home Renovation",
-    "Pest Control",
-    "Appliance Repair",
-    "Modular Kitchen Design",
-    "Custom Wardrobes",
-    "Space Planning",
-    "False Ceiling & Lighting",
-    "Vastu Consultation",
-    "Smart Home Automation",
-    "POP & Wall Textures",
-    "Balcony & Terrace Garden",
-    "Modular Furniture",
-    "Pooja Unit Design",
-  ];
+	const serviceProviders = vendorsData?.vendors || [];
+	const totalPages = vendorsData?.totalPages || 1;
+	const totalResults = vendorsData?.total || 0;
 
-  // Generate star rating component
-  const renderStars = (rating) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 >= 0.5;
-    for (let i = 1; i <= 5; i++) {
-      if (i <= fullStars) {
-        stars.push(<i key={i} className="fas fa-star text-yellow-400"></i>);
-      } else if (i === fullStars + 1 && hasHalfStar) {
-        stars.push(
-          <i key={i} className="fas fa-star-half-alt text-yellow-400"></i>
-        );
-      } else {
-        stars.push(<i key={i} className="far fa-star text-yellow-400"></i>);
-      }
-    }
-    return stars;
-  };
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header Banner */}
-      <header className="bg-indigo-800 text-white py-10">
-        <div className="container mx-auto px-4">
-          <h1 className="text-3xl md:text-4xl font-bold text-center mb-8">
-            Get Matched with Local Professionals
-          </h1>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            <div className="flex flex-col items-center text-center">
-              <div className="w-14 h-14 bg-indigo-700 rounded-full flex items-center justify-center mb-3">
-                <span className="text-xl font-bold">1</span>
-              </div>
-              <p className="text-lg">
-                <i className="fas fa-clipboard-list mr-2"></i>Answer questions
-                about your project
-              </p>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <div className="w-14 h-14 bg-indigo-700 rounded-full flex items-center justify-center mb-3">
-                <span className="text-xl font-bold">2</span>
-              </div>
-              <p className="text-lg">
-                <i className="fas fa-users mr-2"></i>Get connected with pros for
-                free
-              </p>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <div className="w-14 h-14 bg-indigo-700 rounded-full flex items-center justify-center mb-3">
-                <span className="text-xl font-bold">3</span>
-              </div>
-              <p className="text-lg">
-                <i className="fas fa-handshake mr-2"></i>Hire the right pro with
-                confidence
-              </p>
-            </div>
-          </div>
-          <div className="max-w-md mx-auto flex flex-col sm:flex-row gap-3">
-            <div className="flex-grow">
-              <Input
-                type="text"
-                placeholder="Enter ZIP Code"
-                className="h-12 border-2 border-white bg-white/10 text-white placeholder:text-white/70 focus:border-indigo-400 w-full"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-              />
-            </div>
-            <Button className="h-12 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold px-6 !rounded-button whitespace-nowrap">
-              Get Started
-            </Button>
-          </div>
-        </div>
-      </header>
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        {/* Mobile Filter Toggle */}
-        <div className="md:hidden mb-4">
-          <Button
-            onClick={() => setShowFilters(!showFilters)}
-            className="w-full bg-indigo-700 hover:bg-indigo-800 text-white !rounded-button whitespace-nowrap"
-          >
-            {showFilters ? "Hide Filters" : "Show Filters"}{" "}
-            <i
-              className={`fas fa-filter ml-2 ${
-                showFilters ? "fa-rotate-180" : ""
-              }`}
-            ></i>
-          </Button>
-        </div>
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Filters Sidebar */}
-          <div
-            className={`md:w-1/4 ${showFilters ? "block" : "hidden"} md:block`}
-          >
-            <div className="bg-white rounded-lg shadow-md p-5 sticky top-4">
-              <h2 className="text-xl font-bold mb-5 text-indigo-800">
-                Filters
-              </h2>
-              {/* Location Filter */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-2">
-                  Location
-                </label>
-                <div className="relative">
-                  <Input
-                    type="text"
-                    placeholder="City, State or ZIP"
-                    className="pl-10 border-gray-300"
-                    value={locationFilter}
-                    onChange={(e) => setLocationFilter(e.target.value)}
-                  />
-                  <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                </div>
-              </div>
-              {/* Radius Filter */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-2">Radius</label>
-                <div className="space-y-2">
-                  <Slider
-                    defaultValue={[25]}
-                    max={100}
-                    step={5}
-                    onValueChange={(value) => setRadius(value[0])}
-                    className="my-4"
-                  />
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>0 km</span>
-                    <span>{radius} km</span>
-                    <span>100 km</span>
-                  </div>
-                </div>
-              </div>
-              {/* Categories Filter */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-2">
-                  Professional Category
-                </label>
-                <ScrollArea className="h-48 rounded border border-gray-200 p-2">
-                  <div className="space-y-2">
-                    {categories.map((category, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <Checkbox id={`category-${index}`} />
-                        <Label
-                          htmlFor={`category-${index}`}
-                          className="text-sm cursor-pointer"
-                        >
-                          {category}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-              {/* Ratings Filter */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Ratings
-                </label>
-                <RadioGroup defaultValue="all">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <RadioGroupItem value="all" id="rating-all" />
-                    <Label htmlFor="rating-all" className="cursor-pointer">
-                      All Ratings
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <RadioGroupItem value="5" id="rating-5" />
-                    <Label
-                      htmlFor="rating-5"
-                      className="cursor-pointer flex items-center"
-                    >
-                      <span className="flex text-yellow-400">
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                      </span>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <RadioGroupItem value="4" id="rating-4" />
-                    <Label
-                      htmlFor="rating-4"
-                      className="cursor-pointer flex items-center"
-                    >
-                      <span className="flex text-yellow-400">
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                      </span>
-                      <span className="text-gray-400">
-                        <i className="fas fa-star"></i>
-                      </span>
-                      <span className="ml-1 text-sm text-gray-500">& up</span>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <RadioGroupItem value="3" id="rating-3" />
-                    <Label
-                      htmlFor="rating-3"
-                      className="cursor-pointer flex items-center"
-                    >
-                      <span className="flex text-yellow-400">
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                      </span>
-                      <span className="text-gray-400">
-                        <i className="fas fa-star"></i>
-                        <i className="fas fa-star"></i>
-                      </span>
-                      <span className="ml-1 text-sm text-gray-500">& up</span>
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            </div>
-          </div>
-          {/* Service Providers Listings */}
-          {/* <div className="md:w-3/4">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800">
-              Available Service Providers
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-6">
-              {serviceProviders.map((provider) => (
-                <div
-                  key={provider.id}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-                >
-                  <div className="h-48 overflow-hidden">
-                    <img
-                      src={provider.imageUrl}
-                      alt={provider.name}
-                      className="w-full h-full object-cover object-top"
-                    />
-                  </div>
-                  <div className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-lg font-semibold text-gray-800">
-                        {provider.name}
-                      </h3>
-                      <div className="flex items-center">
-                        <div className="flex mr-1">
-                          {renderStars(provider.rating)}
-                        </div>
-                        <span className="text-sm text-gray-500">
-                          ({provider.reviews})
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-gray-600 mb-3 line-clamp-2">
-                      {provider.description}
-                    </p>
-                    <div className="flex items-start mb-4">
-                      <i className="fas fa-map-marker-alt text-indigo-700 mt-1 mr-2"></i>
-                      <span className="text-sm text-gray-500">
-                        {provider.address}
-                      </span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-2 mt-auto">
-                      <Button
-                        className="bg-indigo-700 hover:bg-indigo-800 text-white flex-grow !rounded-button whitespace-nowrap cursor-pointer"
-                        onClick={() => handleSendMessage(provider.id)}
-                      >
-                        <i className="fas fa-envelope mr-2"></i> Send Message
-                      </Button>
+	// Update URL params when filters change
+	useEffect(() => {
+		const params = new URLSearchParams();
+		if (locationFilter) params.set('location', locationFilter);
+		if (selectedProfession) params.set('profession', selectedProfession);
+		if (selectedCategories.length > 0)
+			params.set('categories', selectedCategories.join(','));
+		setSearchParams(params);
+	}, [locationFilter, selectedProfession, selectedCategories, setSearchParams]);
 
-                      <Dialog
-                        open={messageModal}
-                        onOpenChange={setMessageModal}
-                      >
-                        <DialogContent className="sm:max-w-[500px]">
-                          <DialogHeader>
-                            <DialogTitle className="text-xl font-semibold flex items-center gap-2">
-                              <i className="fas fa-envelope text-indigo-700"></i>
-                              Message to {selectedProvider?.name}
-                            </DialogTitle>
-                            <p className="text-sm text-gray-500">
-                              <i className="fas fa-clock mr-2"></i>
-                              Typically responds within 24 hours
-                            </p>
-                          </DialogHeader>
+	const handleSendMessage = (providerId) => {
+		const provider = serviceProviders.find((p) => p._id === providerId);
+		setSelectedProvider(provider);
+		setMessageModal(true);
+	};
 
-                          <div className="space-y-4 py-4">
-                            <div>
-                              <Label
-                                htmlFor="subject"
-                                className="text-sm font-medium"
-                              >
-                                Subject
-                              </Label>
-                              <Input
-                                id="subject"
-                                value={`Inquiry about services from ${selectedProvider?.name}`}
-                                readOnly
-                                className="mt-1"
-                              />
-                            </div>
+	const handleSubmitMessage = async () => {
+		try {
+			if (!apiUtils.isAuthenticated()) {
+				alert('Please login to send messages');
+				return;
+			}
 
-                            <div>
-                              <Label
-                                htmlFor="message"
-                                className="text-sm font-medium"
-                              >
-                                Message
-                              </Label>
-                              <Textarea
-                                id="message"
-                                placeholder="Type your message here..."
-                                value={messageContent}
-                                onChange={(e) =>
-                                  setMessageContent(e.target.value)
-                                }
-                                className="mt-1 min-h-[150px]"
-                              />
-                            </div>
+			setSendingMessage(true);
+			const user = apiUtils.getCurrentUser();
 
-                            <div>
-                              <Label
-                                htmlFor="attachments"
-                                className="text-sm font-medium"
-                              >
-                                Attachments (optional)
-                              </Label>
-                              <Input
-                                id="attachments"
-                                type="file"
-                                multiple
-                                className="mt-1"
-                                onChange={(e) => setAttachments(e.target.files)}
-                              />
-                              <p className="text-xs text-gray-500 mt-1">
-                                Max file size: 10MB. Supported formats: jpg,
-                                png, pdf, doc
-                              </p>
-                            </div>
-                          </div>
+			await messageAPI.send({
+				vendorId: selectedProvider._id,
+				message: messageContent,
+				name: user?.name || 'Anonymous User',
+				email: user?.email || '',
+				phone: user?.phone || '',
+			});
 
-                          <DialogFooter className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              onClick={() => setMessageModal(false)}
-                              className="!rounded-button"
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              onClick={handleSubmitMessage}
-                              className="bg-indigo-700 hover:bg-indigo-800 text-white !rounded-button"
-                            >
-                              <i className="fas fa-paper-plane mr-2"></i>
-                              Send Message
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                      <Link to={"/design-vendor"}>
-                        <Button
-                          variant="outline"
-                          className="text-indigo-700 border-indigo-700 hover:bg-indigo-50 !rounded-button whitespace-nowrap cursor-pointer"
-                        >
-                          Read More
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-8 text-center">
-              <Button className="bg-indigo-700 hover:bg-indigo-800 text-white px-6 py-2 !rounded-button whitespace-nowrap cursor-pointer">
-                Load More <i className="fas fa-chevron-down ml-2"></i>
-              </Button>
-            </div>
-          </div> */}
-          <div className="md:w-3/4 mx-auto">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800">
-              Available Service Providers
-            </h2>
+			alert('Message sent successfully!');
+			setMessageContent('');
+			setMessageModal(false);
+		} catch (error) {
+			console.error('Error sending message:', error);
+			alert(error.response?.data?.message || 'Failed to send message');
+		} finally {
+			setSendingMessage(false);
+		}
+	};
 
-            <div className="space-y-6">
-              {serviceProviders.map((provider) => (
-                <div
-                  key={provider.id}
-                  className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden flex flex-col md:flex-row"
-                >
-                  <Link
-                    to="/design-vendor"
-                    className="md:w-1/3 h-60 md:h-auto overflow-hidden block"
-                  >
-                    <img
-                      src={provider.imageUrl}
-                      alt={provider.name}
-                      className="w-full h-full object-cover object-center md:rounded-l-lg"
-                    />
-                  </Link>
+	const handleCategoryFilter = (category) => {
+		setSelectedCategories((prev) =>
+			prev.includes(category)
+				? prev.filter((c) => c !== category)
+				: [...prev, category]
+		);
+		setCurrentPage(1);
+	};
 
-                  <div className="p-4 flex flex-col justify-between md:w-2/3">
-                    <div>
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-lg font-semibold text-gray-800">
-                          {provider.name}
-                        </h3>
-                        <div className="flex items-center">
-                          <div className="flex mr-1">
-                            {renderStars(provider.rating)}
-                          </div>
-                          <span className="text-sm text-gray-500">
-                            ({provider.reviews})
-                          </span>
-                        </div>
-                      </div>
+	const clearAllFilters = () => {
+		setLocationFilter('');
+		setSelectedProfession('');
+		setSelectedCategories([]);
+		setZipCode('');
+		setCurrentPage(1);
+		setSearchParams(new URLSearchParams());
+	};
 
-                      <p className="text-gray-600 mb-3 line-clamp-2">
-                        {provider.description}
-                      </p>
+	const renderStars = (rating) => {
+		const stars = [];
+		const fullStars = Math.floor(rating);
+		const hasHalfStar = rating % 1 >= 0.5;
 
-                      <div className="flex items-start mb-4">
-                        <i className="fas fa-map-marker-alt text-indigo-700 mt-1 mr-2"></i>
-                        <span className="text-sm text-gray-500">
-                          {provider.address}
-                        </span>
-                      </div>
-                    </div>
+		for (let i = 1; i <= 5; i++) {
+			if (i <= fullStars) {
+				stars.push(
+					<span key={i} className="text-yellow-400">
+						★
+					</span>
+				);
+			} else if (i === fullStars + 1 && hasHalfStar) {
+				stars.push(
+					<span key={i} className="text-yellow-400">
+						☆
+					</span>
+				);
+			} else {
+				stars.push(
+					<span key={i} className="text-gray-300">
+						★
+					</span>
+				);
+			}
+		}
+		return stars;
+	};
 
-                    <div className="flex flex-col sm:flex-row gap-2 mt-auto">
-                      <Button
-                        className="bg-indigo-700 hover:bg-indigo-800 text-white flex-grow !rounded-button"
-                        onClick={() => {
-                          setSelectedProvider(provider);
-                          setMessageModal(true);
-                        }}
-                      >
-                        <i className="fas fa-envelope mr-2"></i> Send Message
-                      </Button>
+	const categories = [
+		'Kitchen',
+		'Living Room',
+		'Bedroom',
+		'Bathroom',
+		'Office',
+		'Dining Room',
+		'Balcony',
+		'Pooja Room',
+	];
 
-                      <Link to="/design-vendor">
-                        <Button
-                          variant="outline"
-                          className="text-indigo-700 border-indigo-700 hover:bg-indigo-50 !rounded-button whitespace-nowrap"
-                        >
-                          Read More
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+	const professionTypes = [
+		'Interior Designer',
+		'Architect',
+		'Contractor',
+		'Furniture Dealer',
+		'Decorator',
+	];
 
-            {/* Message Dialog Outside Map */}
-            <Dialog open={messageModal} onOpenChange={setMessageModal}>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-semibold flex items-center gap-2">
-                    <i className="fas fa-envelope text-indigo-700"></i>
-                    Message to {selectedProvider?.name}
-                  </DialogTitle>
-                  <p className="text-sm text-gray-500">
-                    <i className="fas fa-clock mr-2"></i>
-                    Typically responds within 24 hours
-                  </p>
-                </DialogHeader>
+	if (loading && currentPage === 1) {
+		return (
+			<div className="flex justify-center items-center min-h-screen">
+				<div className="text-center">
+					<div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+					<p className="text-gray-600">Finding design professionals...</p>
+				</div>
+			</div>
+		);
+	}
 
-                <div className="space-y-4 py-4">
-                  <div>
-                    <Label htmlFor="subject" className="text-sm font-medium">
-                      Subject
-                    </Label>
-                    <Input
-                      id="subject"
-                      value={`Inquiry about services from ${selectedProvider?.name}`}
-                      readOnly
-                      className="mt-1"
-                    />
-                  </div>
+	return (
+		<div className="min-h-screen bg-gray-50">
+			{/* Hero Section */}
+			<div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white py-16">
+				<div className="max-w-7xl mx-auto px-4 text-center">
+					<h1 className="text-4xl md:text-6xl font-bold mb-4">
+						Find Design Professionals
+					</h1>
+					<p className="text-xl text-indigo-100 max-w-2xl mx-auto">
+						From modular kitchens to vastu-aligned interiors, our expert
+						designers bring a perfect blend of tradition and modern design to
+						your home.
+					</p>
+				</div>
+			</div>
 
-                  <div>
-                    <Label htmlFor="message" className="text-sm font-medium">
-                      Message
-                    </Label>
-                    <Textarea
-                      id="message"
-                      placeholder="Type your message here..."
-                      value={messageContent}
-                      onChange={(e) => setMessageContent(e.target.value)}
-                      className="mt-1 min-h-[150px]"
-                    />
-                  </div>
+			<div className="max-w-7xl mx-auto px-4 py-6">
+				{/* Error Display */}
+				{error && (
+					<div className="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+						<div className="flex justify-between items-center">
+							<span>Error: {error}</span>
+							<Button onClick={refetch} size="sm">
+								Retry
+							</Button>
+						</div>
+					</div>
+				)}
 
-                  <div>
-                    <Label
-                      htmlFor="attachments"
-                      className="text-sm font-medium"
-                    >
-                      Attachments (optional)
-                    </Label>
-                    <Input
-                      id="attachments"
-                      type="file"
-                      multiple
-                      className="mt-1"
-                      onChange={(e) => setAttachments(e.target.files)}
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Max file size: 10MB. Supported formats: jpg, png, pdf, doc
-                    </p>
-                  </div>
-                </div>
+				<div className="flex gap-8">
+					{/* Sidebar Filters */}
+					<div className="w-64 flex-shrink-0">
+						<div className="bg-white rounded-lg shadow-sm p-6 sticky top-6">
+							<div className="flex justify-between items-center mb-4">
+								<h3 className="text-lg font-semibold">Filters</h3>
+								<Button variant="ghost" size="sm" onClick={clearAllFilters}>
+									Clear All
+								</Button>
+							</div>
 
-                <DialogFooter className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setMessageModal(false)}
-                    className="!rounded-button"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSubmitMessage}
-                    className="bg-indigo-700 hover:bg-indigo-800 text-white !rounded-button"
-                  >
-                    <i className="fas fa-paper-plane mr-2"></i>
-                    Send Message
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+							{/* Location Filter */}
+							<div className="mb-6">
+								<Label className="block text-sm font-medium text-gray-700 mb-2">
+									Location
+								</Label>
+								<Input
+									type="text"
+									placeholder="Enter city name"
+									value={locationFilter}
+									onChange={(e) => {
+										setLocationFilter(e.target.value);
+										setCurrentPage(1);
+									}}
+								/>
+							</div>
 
-            <div className="mt-8 text-center">
-              <Button className="bg-indigo-700 hover:bg-indigo-800 text-white px-6 py-2 !rounded-button whitespace-nowrap">
-                Load More <i className="fas fa-chevron-down ml-2"></i>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </main>
-      {/* Footer */}
-    </div>
-  );
+							<div className="mb-6">
+								<Label className="block text-sm font-medium text-gray-700 mb-2">
+									ZIP Code
+								</Label>
+								<Input
+									type="text"
+									placeholder="Enter ZIP code"
+									value={zipCode}
+									onChange={(e) => {
+										setZipCode(e.target.value);
+										setCurrentPage(1);
+									}}
+								/>
+							</div>
+
+							{/* Profession Type */}
+							<div className="mb-6">
+								<Label className="block text-sm font-medium text-gray-700 mb-2">
+									Profession Type
+								</Label>
+								<RadioGroup
+									value={selectedProfession}
+									onValueChange={(value) => {
+										setSelectedProfession(value);
+										setCurrentPage(1);
+									}}>
+									<div className="flex items-center space-x-2">
+										<RadioGroupItem value="" id="all-professions" />
+										<Label htmlFor="all-professions">All</Label>
+									</div>
+									{professionTypes.map((type) => (
+										<div key={type} className="flex items-center space-x-2">
+											<RadioGroupItem value={type} id={type} />
+											<Label htmlFor={type} className="text-sm">
+												{type}
+											</Label>
+										</div>
+									))}
+								</RadioGroup>
+							</div>
+
+							{/* Categories */}
+							<div className="mb-6">
+								<Label className="block text-sm font-medium text-gray-700 mb-2">
+									Specializations
+								</Label>
+								<div className="space-y-2 max-h-48 overflow-y-auto">
+									{categories.map((category) => (
+										<div key={category} className="flex items-center space-x-2">
+											<Checkbox
+												id={category}
+												checked={selectedCategories.includes(category)}
+												onCheckedChange={() => handleCategoryFilter(category)}
+											/>
+											<Label htmlFor={category} className="text-sm">
+												{category}
+											</Label>
+										</div>
+									))}
+								</div>
+							</div>
+
+							{/* Active Filters Summary */}
+							{(selectedCategories.length > 0 ||
+								selectedProfession ||
+								locationFilter) && (
+								<div className="mb-4">
+									<h4 className="text-sm font-medium text-gray-700 mb-2">
+										Active Filters:
+									</h4>
+									<div className="space-y-1">
+										{selectedProfession && (
+											<div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+												{selectedProfession}
+											</div>
+										)}
+										{locationFilter && (
+											<div className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+												📍 {locationFilter}
+											</div>
+										)}
+										{selectedCategories.map((cat) => (
+											<div
+												key={cat}
+												className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+												{cat}
+											</div>
+										))}
+									</div>
+								</div>
+							)}
+						</div>
+					</div>
+
+					{/* Main Content */}
+					<div className="flex-1">
+						{/* Results Header */}
+						<div className="mb-6">
+							<div className="flex justify-between items-center">
+								<p className="text-sm text-gray-600">
+									Found {totalResults.toLocaleString()} professionals
+									{selectedCategories.length > 0 ||
+									selectedProfession ||
+									locationFilter
+										? ' matching your criteria'
+										: ''}
+								</p>
+								{loading && currentPage > 1 && (
+									<div className="text-sm text-gray-500">Loading more...</div>
+								)}
+							</div>
+						</div>
+
+						{/* Service Providers */}
+						<div className="space-y-6">
+							{serviceProviders.length === 0 ? (
+								<div className="text-center py-12">
+									<div className="w-24 h-24 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
+										<i className="fas fa-search text-2xl text-gray-400"></i>
+									</div>
+									<h3 className="text-lg font-medium text-gray-900 mb-2">
+										No professionals found
+									</h3>
+									<p className="text-gray-500 mb-4">
+										Try adjusting your search criteria or location filters
+									</p>
+									<Button onClick={clearAllFilters}>Clear All Filters</Button>
+								</div>
+							) : (
+								serviceProviders.map((provider) => (
+									<div
+										key={provider._id}
+										className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
+										<div className="flex items-start justify-between">
+											<div className="flex space-x-4">
+												<div className="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+													<img
+														src={
+															provider.images?.profileImage ||
+															'https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg'
+														}
+														alt={provider.name}
+														className="w-full h-full object-cover"
+														onError={(e) => {
+															e.target.src =
+																'https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg';
+														}}
+													/>
+												</div>
+												<div className="flex-1">
+													<h3 className="text-xl font-semibold text-gray-900">
+														{provider.title}
+													</h3>
+													<p className="text-gray-600">{provider.name}</p>
+													<p className="text-sm text-gray-500">
+														{provider.professionType}
+													</p>
+
+													<div className="flex items-center mt-2">
+														<div className="flex mr-2">
+															{renderStars(provider.rating || 0)}
+														</div>
+														<span className="text-sm text-gray-600">
+															{(provider.rating || 0).toFixed(1)} (
+															{provider.reviewCount || 0} reviews)
+														</span>
+													</div>
+
+													<p className="text-sm text-gray-600 mt-2">
+														📍 {provider.location?.city},{' '}
+														{provider.location?.state}
+														{provider.location?.pincode &&
+															` - ${provider.location.pincode}`}
+													</p>
+
+													<p className="text-gray-700 mt-3 line-clamp-2">
+														{provider.about ||
+															'Professional interior design services with years of experience.'}
+													</p>
+
+													<div className="flex flex-wrap gap-2 mt-3">
+														{(provider.categories || [])
+															.slice(0, 3)
+															.map((category) => (
+																<span
+																	key={category}
+																	className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+																	{category}
+																</span>
+															))}
+														{(provider.categories || []).length > 3 && (
+															<span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+																+{(provider.categories || []).length - 3} more
+															</span>
+														)}
+													</div>
+
+													{/* Additional Info */}
+													<div className="mt-3 text-sm text-gray-500">
+														{provider.budgetLevel && (
+															<span className="mr-4">
+																💰 {provider.budgetLevel} Budget
+															</span>
+														)}
+														{provider.languages &&
+															provider.languages.length > 0 && (
+																<span>
+																	🗣️ {provider.languages.slice(0, 2).join(', ')}
+																</span>
+															)}
+													</div>
+												</div>
+											</div>
+
+											<div className="flex flex-col space-y-2">
+												<Link to={`/vendor/${provider._id}`}>
+													<Button variant="outline" className="w-full">
+														View Profile
+													</Button>
+												</Link>
+												<Button
+													onClick={() => handleSendMessage(provider._id)}
+													className="w-full">
+													Send Message
+												</Button>
+											</div>
+										</div>
+									</div>
+								))
+							)}
+						</div>
+
+						{/* Pagination */}
+						{totalPages > 1 && (
+							<div className="flex justify-center mt-8">
+								<div className="flex gap-2">
+									<Button
+										variant="outline"
+										disabled={currentPage === 1 || loading}
+										onClick={() => setCurrentPage(currentPage - 1)}>
+										Previous
+									</Button>
+
+									{[...Array(Math.min(totalPages, 5))].map((_, index) => {
+										const pageNum = index + 1;
+										return (
+											<Button
+												key={pageNum}
+												variant={
+													currentPage === pageNum ? 'default' : 'outline'
+												}
+												onClick={() => setCurrentPage(pageNum)}
+												disabled={loading}>
+												{pageNum}
+											</Button>
+										);
+									})}
+
+									<Button
+										variant="outline"
+										disabled={currentPage === totalPages || loading}
+										onClick={() => setCurrentPage(currentPage + 1)}>
+										Next
+									</Button>
+								</div>
+							</div>
+						)}
+
+						{/* Load More Button (Alternative to pagination) */}
+						{currentPage < totalPages && (
+							<div className="text-center mt-6">
+								<Button
+									variant="outline"
+									onClick={() => setCurrentPage(currentPage + 1)}
+									disabled={loading}>
+									{loading ? 'Loading...' : 'Load More Professionals'}
+								</Button>
+							</div>
+						)}
+					</div>
+				</div>
+			</div>
+
+			{/* Message Modal */}
+			<Dialog open={messageModal} onOpenChange={setMessageModal}>
+				<DialogContent className="max-w-md">
+					<DialogHeader>
+						<DialogTitle>Send Message to {selectedProvider?.title}</DialogTitle>
+					</DialogHeader>
+					<div className="space-y-4">
+						<div className="bg-gray-50 p-3 rounded-lg">
+							<p className="text-sm text-gray-600">
+								💡 <strong>Tip:</strong> Be specific about your project
+								requirements, budget range, and timeline to get better
+								responses.
+							</p>
+						</div>
+						<Textarea
+							placeholder="Hi! I'm interested in your services for my [room type] project. My budget is around ₹[amount] and I'm looking to start in [timeframe]. Could you please share more details about your services and availability?"
+							value={messageContent}
+							onChange={(e) => setMessageContent(e.target.value)}
+							rows={6}
+						/>
+						<div className="text-xs text-gray-500">
+							Your contact information will be shared with the professional.
+						</div>
+					</div>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setMessageModal(false);
+								setMessageContent('');
+							}}
+							disabled={sendingMessage}>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleSubmitMessage}
+							disabled={!messageContent.trim() || sendingMessage}>
+							{sendingMessage ? 'Sending...' : 'Send Message'}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</div>
+	);
 };
-export default DesignIdeas;
+
+export default DesignIdeasPage;

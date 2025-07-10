@@ -1,245 +1,320 @@
-import React, { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Home, Image, Layers, PlusCircle, Search } from "lucide-react";
+// Navbar.jsx - Enhanced with vendor dashboard access
+import { Button } from '@/components/ui/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from './hooks/useApi';
 
-function Navbar() {
-  const location = useLocation();
-  const [openDropdown, setOpenDropdown] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
+const Navbar = () => {
+	const [isMenuOpen, setIsMenuOpen] = useState(false);
+	const { user, isAuthenticated, logout } = useAuth();
+	const navigate = useNavigate();
+	const menuRef = useRef(null);
 
-  const dummySearchData = [
-    "Modern Living Room Design",
-    "Indian Traditional Bedroom",
-    "Vastu Compliant Kitchen Layout",
-    "Wall Color Combinations",
-    "Mandir Design Ideas",
-    "Wooden False Ceiling Designs",
-    "Space-saving Furniture",
-    "Modular Kitchen Cabinets",
-    "Royal Rajasthani Decor",
-    "Contemporary Hall Partition",
-    "South Indian Interior Themes",
-    "North Indian Wooden Interiors",
-    "LED Lighting for Drawing Room",
-    "Pooja Room Vastu Tips",
-    "Minimalist Indian Apartment",
-    "Kids Bedroom Decor India",
-  ];
+	// Close menu when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			if (menuRef.current && !menuRef.current.contains(event.target)) {
+				setIsMenuOpen(false);
+			}
+		};
 
-  const filteredSuggestions =
-    searchQuery.length > 0
-      ? dummySearchData.filter((item) =>
-          item.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : [];
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
 
-  const navLinks = [
-    { name: "Home", to: "/", icon: <Home size={20} /> },
-    { name: "Features", to: "/feature", icon: <Layers size={20} /> },
-    { name: "Ai Tool", to: "/search-ai", icon: <PlusCircle size={20} /> },
-    {
-      name: "Idea's",
-      to: "/pros",
-      icon: <Image size={20} />,
-      dropdown: true,
-      children: [
-        { name: "Electricians", to: "/pros/electricians" },
-        { name: "Carpenters", to: "/pros/carpenters" },
-        { name: "Painters", to: "/pros/painters" },
-        { name: "Interior Designers", to: "/pros/interior-designers" },
-        { name: "Architects", to: "/pros/architects" },
-        { name: "Contractors", to: "/pros/contractors" },
-        {
-          name: "Modular Kitchen Experts",
-          to: "/pros/modular-kitchen-experts",
-        },
-      ],
-    },
-    {
-      name: "Find Pros",
-      to: "/design-ideas",
-      icon: <Image size={20} />,
-      dropdown: true,
-      children: [
-        { name: "Plumbers", to: "/pros/plumbers" },
-        { name: "Roofers", to: "/pros/roofers" },
-        { name: "Flooring Specialists", to: "/pros/flooring-specialists" },
-        { name: "Landscape Designers", to: "/pros/landscape-designers" },
-        { name: "HVAC Technicians", to: "/pros/hvac-technicians" },
-      ],
-    },
-  ];
+	const handleLogout = async () => {
+		try {
+			await logout();
+			navigate('/');
+		} catch (error) {
+			console.error('Logout error:', error);
+		}
+	};
 
-  return (
-    <>
-      {/* Desktop Navbar */}
-      <header className="bg-white shadow-sm relative z-50 hidden md:block">
-        <div className="mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="text-2xl font-bold text-indigo-600">
-              Interior 5D
-            </div>
+	const getUserInitials = (name) => {
+		if (!name) return 'U';
+		return name
+			.split(' ')
+			.map((n) => n[0])
+			.join('')
+			.toUpperCase()
+			.slice(0, 2);
+	};
 
-            {/* Search Input (Desktop) */}
-            <div className="flex items-center space-x-2 relative">
-              <div className="relative w-72 lg:w-96">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search..."
-                  className="w-full pl-10 pr-4 py-1.5 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <Search
-                  className="absolute left-3 top-2.5 text-gray-500"
-                  size={16}
-                />
-                {filteredSuggestions.length > 0 && (
-                  <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg text-sm max-h-60 overflow-y-auto">
-                    {filteredSuggestions.map((suggestion, index) => (
-                      <li
-                        key={index}
-                        className="px-4 py-2 hover:bg-indigo-100 cursor-pointer"
-                        onClick={() => setSearchQuery(suggestion)}
-                      >
-                        {suggestion}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
+	const getUserDisplayName = () => {
+		if (!user) return 'User';
+		return user.name || user.title || user.email?.split('@')[0] || 'User';
+	};
 
-            <nav className="ml-10 flex items-center space-x-10">
-              {navLinks.map((link) =>
-                link.children ? (
-                  <div
-                    className="relative"
-                    key={link.name}
-                    onMouseEnter={() => setOpenDropdown(link.name)}
-                    onMouseLeave={() => setOpenDropdown(null)}
-                  >
-                    <Link
-                      to={link.to}
-                      className={`px-3 py-2 text-md font-medium flex items-center gap-1 ${
-                        location.pathname === link.to
-                          ? "text-indigo-600 border-b-2 border-indigo-600"
-                          : "text-gray-500 hover:text-indigo-600"
-                      }`}
-                    >
-                      {link.name} {openDropdown === link.name ? "▴" : "▾"}
-                    </Link>
-                    {openDropdown === link.name && (
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 bg-white shadow-lg p-4 rounded-md flex gap-8 z-50">
-                        {[
-                          ...Array(Math.ceil(link.children.length / 10)).keys(),
-                        ].map((col) => (
-                          <div key={col} className="flex flex-col items-center">
-                            {link.children
-                              .slice(col * 10, (col + 1) * 10)
-                              .map((child) => (
-                                <Link
-                                  key={child.name}
-                                  to={child.to}
-                                  className={`w-40 text-sm py-1 text-start ${
-                                    location.pathname === child.to
-                                      ? "text-indigo-600 font-semibold"
-                                      : "text-gray-700 hover:font-semibold hover:text-indigo-600"
-                                  }`}
-                                >
-                                  {child.name}
-                                </Link>
-                              ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <Link
-                    key={link.name}
-                    to={link.to}
-                    className={`px-3 py-2 text-md font-medium cursor-pointer ${
-                      location.pathname === link.to
-                        ? "text-indigo-600 border-b-2 border-indigo-600"
-                        : "text-gray-500 hover:text-indigo-600"
-                    }`}
-                  >
-                    {link.name}
-                  </Link>
-                )
-              )}
-            </nav>
-          </div>
-        </div>
-      </header>
+	return (
+		<nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+				<div className="flex justify-between items-center h-16">
+					{/* Logo */}
+					<Link to="/" className="flex items-center space-x-2">
+						<div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+							<i className="fas fa-home text-white text-sm"></i>
+						</div>
+						<span className="text-xl font-bold text-gray-900">DesignVerse</span>
+					</Link>
 
-      {/* Mobile Top Title */}
-      <div className="md:hidden bg-white shadow-sm px-4 py-3 text-xl font-bold text-indigo-600 text-center">
-        Interior 5D
-      </div>
+					{/* Desktop Navigation */}
+					<div className="hidden md:flex items-center space-x-8">
+						<Link
+							to="/ideas"
+							className="text-gray-700 hover:text-blue-600 transition-colors">
+							Design Ideas
+						</Link>
+						<Link
+							to="/design-ideas"
+							className="text-gray-700 hover:text-blue-600 transition-colors">
+							Find Professionals
+						</Link>
+						<Link
+							to="/features"
+							className="text-gray-700 hover:text-blue-600 transition-colors">
+							Features
+						</Link>
+						<Link
+							to="/resources"
+							className="text-gray-700 hover:text-blue-600 transition-colors">
+							Resources
+						</Link>
+					</div>
 
-      {/* Search Input (Mobile) */}
-      {/* <div className="md:hidden bg-white px-4 py-2">
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            className="pl-10 pr-4 py-1.5 w-full border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <Search className="absolute left-3 top-2.5 text-gray-500" size={16} />
-        </div
-      </div> */}
+					{/* Authentication Section */}
+					<div className="flex items-center space-x-4">
+						{isAuthenticated && user ? (
+							<div className="flex items-center space-x-3">
+								{/* User Role Badge */}
+								{user.role && user.role !== 'user' && (
+									<span
+										className={`px-2 py-1 text-xs rounded-full ${
+											user.role === 'vendor'
+												? 'bg-green-100 text-green-800'
+												: user.role === 'admin'
+												? 'bg-purple-100 text-purple-800'
+												: 'bg-gray-100 text-gray-800'
+										}`}>
+										{user.role}
+									</span>
+								)}
 
-      <div className="md:hidden bg-white px-4 py-2">
-        <div className="relative ">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search..."
-            className="w-full pl-10 pr-4 py-1.5 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          <Search className="absolute left-3 top-2.5 text-gray-500" size={16} />
-          {filteredSuggestions.length > 0 && (
-            <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg text-sm max-h-60 overflow-y-auto">
-              {filteredSuggestions.map((suggestion, index) => (
-                <li
-                  key={index}
-                  className="px-4 py-2 hover:bg-indigo-100 cursor-pointer"
-                  onClick={() => setSearchQuery(suggestion)}
-                >
-                  {suggestion}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+								{/* User Dropdown Menu */}
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<button className="flex items-center space-x-2 bg-gray-50 hover:bg-gray-100 rounded-full p-2 transition-colors">
+											<div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
+												{user.images?.profileImage ? (
+													<img
+														src={user.images.profileImage}
+														alt="Profile"
+														className="w-8 h-8 rounded-full object-cover"
+														onError={(e) => {
+															e.target.style.display = 'none';
+															e.target.nextSibling.style.display = 'block';
+														}}
+													/>
+												) : (
+													getUserInitials(getUserDisplayName())
+												)}
+												<span
+													style={{
+														display: user.images?.profileImage
+															? 'none'
+															: 'block',
+													}}
+													className="text-sm font-medium">
+													{getUserInitials(getUserDisplayName())}
+												</span>
+											</div>
+											<div className="hidden sm:block text-left">
+												<p className="text-sm font-medium text-gray-900">
+													{getUserDisplayName()}
+												</p>
+												<p className="text-xs text-gray-500">{user.email}</p>
+											</div>
+											<i className="fas fa-chevron-down text-gray-400 text-xs"></i>
+										</button>
+									</DropdownMenuTrigger>
 
-      {/* Mobile Bottom Navbar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t md:hidden">
-        <div className="flex justify-around items-center h-14">
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              to={link.to}
-              className={`flex flex-col items-center text-xs ${
-                location.pathname === link.to
-                  ? "text-indigo-600"
-                  : "text-gray-500 hover:text-indigo-600"
-              }`}
-            >
-              {link.icon}
-              {link.name}
-            </Link>
-          ))}
-        </div>
-      </nav>
-    </>
-  );
-}
+									<DropdownMenuContent align="end" className="w-56">
+										{/* User Info Header */}
+										<div className="px-3 py-2 border-b">
+											<p className="text-sm font-medium text-gray-900">
+												{getUserDisplayName()}
+											</p>
+											<p className="text-xs text-gray-500">{user.email}</p>
+											{user.role && (
+												<p className="text-xs text-blue-600 capitalize mt-1">
+													{user.role} Account
+												</p>
+											)}
+										</div>
+
+										{/* Vendor Dashboard Access */}
+										{user.role === 'vendor' && (
+											<>
+												<DropdownMenuItem asChild>
+													<Link
+														to="/vendor-dashboard"
+														className="flex items-center">
+														<i className="fas fa-tachometer-alt mr-2 text-green-600"></i>
+														Vendor Dashboard
+													</Link>
+												</DropdownMenuItem>
+												<DropdownMenuItem asChild>
+													<Link
+														to="/vendor-dashboard/services"
+														className="flex items-center">
+														<i className="fas fa-briefcase mr-2 text-blue-600"></i>
+														My Services
+													</Link>
+												</DropdownMenuItem>
+												<DropdownMenuItem asChild>
+													<Link
+														to="/vendor-dashboard/messages"
+														className="flex items-center">
+														<i className="fas fa-envelope mr-2 text-purple-600"></i>
+														Messages
+													</Link>
+												</DropdownMenuItem>
+												<DropdownMenuSeparator />
+											</>
+										)}
+
+										{/* Admin Dashboard Access */}
+										{user.role === 'admin' && (
+											<>
+												<DropdownMenuItem asChild>
+													<Link
+														to="/admin-dashboard"
+														className="flex items-center">
+														<i className="fas fa-cog mr-2 text-purple-600"></i>
+														Admin Dashboard
+													</Link>
+												</DropdownMenuItem>
+												<DropdownMenuSeparator />
+											</>
+										)}
+
+										{/* Regular User Options */}
+										<DropdownMenuItem asChild>
+											<Link to="/profile" className="flex items-center">
+												<i className="fas fa-user mr-2 text-gray-600"></i>
+												My Profile
+											</Link>
+										</DropdownMenuItem>
+
+										<DropdownMenuItem asChild>
+											<Link to="/favorites" className="flex items-center">
+												<i className="fas fa-heart mr-2 text-red-600"></i>
+												Saved Designs
+											</Link>
+										</DropdownMenuItem>
+
+										<DropdownMenuItem asChild>
+											<Link to="/settings" className="flex items-center">
+												<i className="fas fa-cog mr-2 text-gray-600"></i>
+												Settings
+											</Link>
+										</DropdownMenuItem>
+
+										<DropdownMenuSeparator />
+
+										<DropdownMenuItem
+											onClick={handleLogout}
+											className="text-red-600 cursor-pointer">
+											<i className="fas fa-sign-out-alt mr-2"></i>
+											Sign Out
+										</DropdownMenuItem>
+									</DropdownMenuContent>
+								</DropdownMenu>
+							</div>
+						) : (
+							<div className="flex items-center space-x-3">
+								<Link to="/login">
+									<Button
+										variant="ghost"
+										className="text-gray-700 hover:text-blue-600">
+										Sign In
+									</Button>
+								</Link>
+								<Link to="/signup">
+									<Button className="bg-blue-600 hover:bg-blue-700 text-white">
+										Get Started
+									</Button>
+								</Link>
+							</div>
+						)}
+
+						{/* Mobile Menu Toggle */}
+						<button
+							onClick={() => setIsMenuOpen(!isMenuOpen)}
+							className="md:hidden p-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-100">
+							<i className={`fas ${isMenuOpen ? 'fa-times' : 'fa-bars'}`}></i>
+						</button>
+					</div>
+				</div>
+
+				{/* Mobile Menu */}
+				{isMenuOpen && (
+					<div
+						ref={menuRef}
+						className="md:hidden border-t border-gray-200 py-4">
+						<div className="flex flex-col space-y-4">
+							<Link
+								to="/ideas"
+								className="text-gray-700 hover:text-blue-600 px-4 py-2"
+								onClick={() => setIsMenuOpen(false)}>
+								Design Ideas
+							</Link>
+							<Link
+								to="/design-ideas"
+								className="text-gray-700 hover:text-blue-600 px-4 py-2"
+								onClick={() => setIsMenuOpen(false)}>
+								Find Professionals
+							</Link>
+							<Link
+								to="/features"
+								className="text-gray-700 hover:text-blue-600 px-4 py-2"
+								onClick={() => setIsMenuOpen(false)}>
+								Features
+							</Link>
+							<Link
+								to="/resources"
+								className="text-gray-700 hover:text-blue-600 px-4 py-2"
+								onClick={() => setIsMenuOpen(false)}>
+								Resources
+							</Link>
+
+							{/* Mobile user menu */}
+							{isAuthenticated && user?.role === 'vendor' && (
+								<>
+									<div className="border-t border-gray-200 pt-4 mt-4">
+										<Link
+											to="/vendor-dashboard"
+											className="text-green-600 hover:text-green-700 px-4 py-2 flex items-center"
+											onClick={() => setIsMenuOpen(false)}>
+											<i className="fas fa-tachometer-alt mr-2"></i>
+											Vendor Dashboard
+										</Link>
+									</div>
+								</>
+							)}
+						</div>
+					</div>
+				)}
+			</div>
+		</nav>
+	);
+};
 
 export default Navbar;
