@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { messageAPI, productAPI, reviewAPI } from '../services/api';
+import { productAPI, reviewAPI } from '../services/api';
 
 const VendorDashboard = () => {
 	const { vendorData } = useOutletContext();
@@ -21,66 +21,68 @@ const VendorDashboard = () => {
 		totalMessages: 0,
 		totalViews: 0,
 		totalOrders: 0,
+		averageRating: 0,
 	});
 	const [recentProducts, setRecentProducts] = useState([]);
 	const [recentReviews, setRecentReviews] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState(null);
 
 	useEffect(() => {
 		const fetchDashboardData = async () => {
 			try {
 				setLoading(true);
+				setError(null);
 
-				// Fetch vendor-specific data in parallel
-				const [productsResponse, reviewsResponse, messagesResponse] =
+				// ✅ Use the proper backend dashboard stats endpoint
+				const [dashboardStatsResponse, productsResponse, reviewsResponse] =
 					await Promise.allSettled([
+						productAPI.getVendorDashboardStats(), // This gives us real stats
 						productAPI.getVendorProducts({ limit: 5 }),
 						reviewAPI.getVendorReviews(vendorData._id, { limit: 5 }),
-						messageAPI.getVendorMessages(),
 					]);
 
-				// Process products data
+				// ✅ Process real dashboard stats from backend
+				if (dashboardStatsResponse.status === 'fulfilled') {
+					const dashboardData = dashboardStatsResponse.value.data;
+					console.log('✅ Dashboard stats from backend:', dashboardData);
+
+					setStats({
+						totalProducts: dashboardData.totalProducts || 0,
+						totalReviews: dashboardData.totalReviews || 0,
+						totalMessages: dashboardData.totalMessages || 0,
+						totalViews: dashboardData.totalViews || 0,
+						totalOrders: dashboardData.totalOrders || 0,
+						averageRating: dashboardData.averageRating || 0,
+					});
+				} else {
+					console.error(
+						'❌ Failed to fetch dashboard stats:',
+						dashboardStatsResponse.reason
+					);
+				}
+
+				// ✅ Process recent products
 				if (productsResponse.status === 'fulfilled') {
 					const productsData = productsResponse.value.data;
 					setRecentProducts(productsData.products || []);
-					setStats((prev) => ({
-						...prev,
-						totalProducts:
-							productsData.total || productsData.products?.length || 0,
-					}));
+				} else {
+					console.error(
+						'❌ Failed to fetch products:',
+						productsResponse.reason
+					);
 				}
 
-				// Process reviews data
+				// ✅ Process recent reviews
 				if (reviewsResponse.status === 'fulfilled') {
 					const reviewsData = reviewsResponse.value.data;
 					setRecentReviews(reviewsData.reviews || []);
-					setStats((prev) => ({
-						...prev,
-						totalReviews: reviewsData.total || reviewsData.reviews?.length || 0,
-					}));
+				} else {
+					console.error('❌ Failed to fetch reviews:', reviewsResponse.reason);
 				}
-
-				// Process messages data
-				if (messagesResponse.status === 'fulfilled') {
-					const messagesData = messagesResponse.value.data;
-					setStats((prev) => ({
-						...prev,
-						totalMessages:
-							messagesData.total || messagesData.messages?.length || 0,
-					}));
-				}
-
-				// Set some default/estimated stats
-				setStats((prev) => ({
-					...prev,
-					totalViews:
-						Math.floor(prev.totalProducts * 50) +
-						Math.floor(Math.random() * 1000),
-					totalOrders:
-						Math.floor(prev.totalProducts * 2) + Math.floor(Math.random() * 50),
-				}));
 			} catch (error) {
-				console.error('Error fetching dashboard data:', error);
+				console.error('❌ Error fetching dashboard data:', error);
+				setError('Failed to load dashboard data. Please try again.');
 			} finally {
 				setLoading(false);
 			}
@@ -89,11 +91,39 @@ const VendorDashboard = () => {
 		if (vendorData?._id) {
 			fetchDashboardData();
 		} else {
-			// If no vendor ID, just stop loading
 			setLoading(false);
 		}
 	}, [vendorData]);
 
+	// ✅ Retry function for error handling
+	const handleRetry = () => {
+		if (vendorData?._id) {
+			const fetchData = async () => {
+				try {
+					setLoading(true);
+					setError(null);
+					const statsResponse = await productAPI.getVendorDashboardStats();
+					const dashboardData = statsResponse.data;
+
+					setStats({
+						totalProducts: dashboardData.totalProducts || 0,
+						totalReviews: dashboardData.totalReviews || 0,
+						totalMessages: dashboardData.totalMessages || 0,
+						totalViews: dashboardData.totalViews || 0,
+						totalOrders: dashboardData.totalOrders || 0,
+						averageRating: dashboardData.averageRating || 0,
+					});
+				} catch (error) {
+					setError('Failed to load dashboard data. Please try again.', error);
+				} finally {
+					setLoading(false);
+				}
+			};
+			fetchData();
+		}
+	};
+
+	// ✅ Updated stat cards with real data
 	const statCards = [
 		{
 			title: 'Total Services',
@@ -105,7 +135,7 @@ const VendorDashboard = () => {
 		},
 		{
 			title: 'Average Rating',
-			value: `${(vendorData?.rating || 0).toFixed(1)}/5`,
+			value: `${stats.averageRating.toFixed(1)}/5`,
 			icon: Star,
 			color: 'text-yellow-600',
 			bgColor: 'bg-yellow-50',
@@ -147,7 +177,6 @@ const VendorDashboard = () => {
 	if (loading) {
 		return (
 			<div className="space-y-6">
-				{/* Loading skeleton */}
 				<div className="animate-pulse">
 					<div className="h-32 bg-gray-200 rounded-lg mb-6"></div>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
@@ -156,6 +185,27 @@ const VendorDashboard = () => {
 						))}
 					</div>
 				</div>
+			</div>
+		);
+	}
+
+	// ✅ Error state with retry option
+	if (error) {
+		return (
+			<div className="space-y-6">
+				<Card className="border-red-200 bg-red-50">
+					<CardContent className="pt-6">
+						<div className="flex items-center justify-between">
+							<div className="flex items-center space-x-2 text-red-600">
+								<MessageSquare className="h-5 w-5" />
+								<span>{error}</span>
+							</div>
+							<Button onClick={handleRetry} size="sm">
+								Retry
+							</Button>
+						</div>
+					</CardContent>
+				</Card>
 			</div>
 		);
 	}
@@ -229,7 +279,7 @@ const VendorDashboard = () => {
 				</Link>
 			</div>
 
-			{/* Stats Cards */}
+			{/* ✅ Stats Cards with Real Backend Data */}
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 				{statCards.map((stat, index) => {
 					const Icon = stat.icon;

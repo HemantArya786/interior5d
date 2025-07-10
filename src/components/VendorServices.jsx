@@ -286,12 +286,20 @@ const VendorServices = () => {
 								</div>
 
 								<div className="flex items-center justify-between mt-4 pt-4 border-t">
-									<Link to={`/vendor-dashboard/edit-service/${service._id}`}>
-										<Button variant="outline" size="sm">
-											<Edit className="h-4 w-4 mr-1" />
-											Edit
-										</Button>
-									</Link>
+									<div className="flex space-x-2">
+										<Link to={`/vendor-dashboard/service/${service._id}`}>
+											<Button variant="outline" size="sm">
+												<Eye className="h-4 w-4 mr-1" />
+												View
+											</Button>
+										</Link>
+										<Link to={`/vendor-dashboard/edit-service/${service._id}`}>
+											<Button variant="outline" size="sm">
+												<Edit className="h-4 w-4 mr-1" />
+												Edit
+											</Button>
+										</Link>
+									</div>
 									<Button
 										variant="outline"
 										size="sm"

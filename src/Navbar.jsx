@@ -1,4 +1,4 @@
-// Navbar.jsx - Enhanced with vendor dashboard access
+// Navbar.jsx - Fixed profile image display with proper backend integration
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -13,9 +13,15 @@ import { useAuth } from './hooks/useApi';
 
 const Navbar = () => {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
-	const { user, isAuthenticated, logout } = useAuth();
+	const [imageError, setImageError] = useState(false);
+	const { user, isAuthenticated, logout, updateProfile } = useAuth();
 	const navigate = useNavigate();
 	const menuRef = useRef(null);
+
+	// ✅ Reset image error when user data changes
+	useEffect(() => {
+		setImageError(false);
+	}, [user?.images?.profileImage]);
 
 	// Close menu when clicking outside
 	useEffect(() => {
@@ -52,6 +58,55 @@ const Navbar = () => {
 		if (!user) return 'User';
 		return user.name || user.title || user.email?.split('@')[0] || 'User';
 	};
+
+	// ✅ Fixed: Get profile image with proper backend structure matching VendorProfile
+	const getProfileImage = () => {
+		if (!user) return null;
+
+		// Check the same image path structure as VendorProfile.jsx
+		const imageUrl = user.images?.profileImage || null;
+
+		console.log('🔍 Navbar checking profile image:', imageUrl);
+		console.log('🔍 User object:', user);
+
+		return imageUrl && !imageError ? imageUrl : null;
+	};
+
+	// ✅ Handle image loading errors
+	const handleImageError = () => {
+		console.log(
+			'❌ Profile image failed to load in navbar:',
+			getProfileImage()
+		);
+		setImageError(true);
+	};
+
+	// ✅ Handle successful image load
+	const handleImageLoad = () => {
+		console.log('✅ Profile image loaded successfully in navbar');
+		setImageError(false);
+	};
+
+	// ✅ Refresh profile data
+	const refreshUserProfile = async () => {
+		try {
+			await updateProfile();
+		} catch (error) {
+			console.error('Failed to refresh profile:', error);
+		}
+	};
+
+	// ✅ Auto-refresh profile every 30 seconds when on profile pages
+	useEffect(() => {
+		const isProfilePage =
+			window.location.pathname.includes('profile') ||
+			window.location.pathname.includes('vendor-dashboard');
+
+		if (isProfilePage) {
+			const interval = setInterval(refreshUserProfile, 30000);
+			return () => clearInterval(interval);
+		}
+	}, []);
 
 	return (
 		<nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
@@ -111,30 +166,23 @@ const Navbar = () => {
 								<DropdownMenu>
 									<DropdownMenuTrigger asChild>
 										<button className="flex items-center space-x-2 bg-gray-50 hover:bg-gray-100 rounded-full p-2 transition-colors">
-											<div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
-												{user.images?.profileImage ? (
+											{/* ✅ Fixed: Profile Image Display matching VendorProfile structure */}
+											<div className="relative w-8 h-8 rounded-full overflow-hidden bg-blue-600 flex items-center justify-center">
+												{getProfileImage() ? (
 													<img
-														src={user.images.profileImage}
-														alt="Profile"
-														className="w-8 h-8 rounded-full object-cover"
-														onError={(e) => {
-															e.target.style.display = 'none';
-															e.target.nextSibling.style.display = 'block';
-														}}
+														src={getProfileImage()}
+														alt={getUserDisplayName()}
+														className="w-full h-full object-cover"
+														onError={handleImageError}
+														onLoad={handleImageLoad}
 													/>
 												) : (
-													getUserInitials(getUserDisplayName())
+													<span className="text-white text-sm font-medium">
+														{getUserInitials(getUserDisplayName())}
+													</span>
 												)}
-												<span
-													style={{
-														display: user.images?.profileImage
-															? 'none'
-															: 'block',
-													}}
-													className="text-sm font-medium">
-													{getUserInitials(getUserDisplayName())}
-												</span>
 											</div>
+
 											<div className="hidden sm:block text-left">
 												<p className="text-sm font-medium text-gray-900">
 													{getUserDisplayName()}
@@ -184,6 +232,14 @@ const Navbar = () => {
 														className="flex items-center">
 														<i className="fas fa-envelope mr-2 text-purple-600"></i>
 														Messages
+													</Link>
+												</DropdownMenuItem>
+												<DropdownMenuItem asChild>
+													<Link
+														to="/vendor-dashboard/profile"
+														className="flex items-center">
+														<i className="fas fa-user-edit mr-2 text-orange-600"></i>
+														Edit Profile
 													</Link>
 												</DropdownMenuItem>
 												<DropdownMenuSeparator />

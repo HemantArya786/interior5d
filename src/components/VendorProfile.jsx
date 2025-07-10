@@ -1,4 +1,17 @@
-// components/VendorProfile.jsx - Complete working version
+// components/VendorProfile.jsx – fully-working version with YouTube-style header
+import {
+	AlertCircle,
+	Camera,
+	CheckCircle,
+	Edit3,
+	Plus,
+	Save,
+	Star,
+	X,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,22 +26,29 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle, CheckCircle, Edit3, Plus, Save, X } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { apiUtils, vendorAPI } from '../services/api';
-import ImageUpload from './ImageUpload';
+import { apiUtils, uploadAPI, vendorAPI } from '../services/api';
 
 const VendorProfile = () => {
+	/* -------------------------------------------------------------------- */
+	/*                         GLOBAL STATE & HANDLERS                      */
+	/* -------------------------------------------------------------------- */
 	const { vendorData, setVendorData } = useOutletContext();
+
 	const [loading, setLoading] = useState(false);
 	const [dataLoading, setDataLoading] = useState(true);
+	const [imageUploading, setImageUploading] = useState({
+		profile: false,
+		cover: false,
+	});
+
 	const [error, setError] = useState('');
 	const [success, setSuccess] = useState('');
 	const [editMode, setEditMode] = useState(false);
 	const [unsavedChanges, setUnsavedChanges] = useState(false);
 
-	// ✅ Complete form data structure
+	/* -------------------------------------------------------------------- */
+	/*                               FORM DATA                              */
+	/* -------------------------------------------------------------------- */
 	const [formData, setFormData] = useState({
 		name: '',
 		title: '',
@@ -41,10 +61,7 @@ const VendorProfile = () => {
 			pincode: '',
 			city: '',
 			state: '',
-			geo: {
-				type: 'Point',
-				coordinates: [0, 0],
-			},
+			geo: { type: 'Point', coordinates: [0, 0] },
 		},
 		categories: [],
 		projectTypes: [],
@@ -63,14 +80,16 @@ const VendorProfile = () => {
 		status: 'pending',
 	});
 
-	// ✅ Custom input states for adding new items
+	/* ---------- local "add item" helpers ---------- */
 	const [newCategory, setNewCategory] = useState('');
 	const [newProjectType, setNewProjectType] = useState('');
 	const [newStyle, setNewStyle] = useState('');
 	const [newLanguage, setNewLanguage] = useState('');
 	const [newHighlight, setNewHighlight] = useState('');
 
-	// ✅ Complete form options
+	/* -------------------------------------------------------------------- */
+	/*                              STATIC LISTS                            */
+	/* -------------------------------------------------------------------- */
 	const professionTypes = [
 		'Interior Designer',
 		'Architect',
@@ -139,87 +158,58 @@ const VendorProfile = () => {
 
 	const budgetLevelOptions = [
 		{ value: 'Low', label: 'Low (Under ₹50,000)' },
-		{ value: 'Medium', label: 'Medium (₹50,000 - ₹2,00,000)' },
+		{ value: 'Medium', label: 'Medium (₹50,000 – ₹2,00,000)' },
 		{ value: 'High', label: 'High (Above ₹2,00,000)' },
 	];
 
-	// ✅ Load vendor data
+	/* -------------------------------------------------------------------- */
+	/*                          LOAD VENDOR PROFILE                         */
+	/* -------------------------------------------------------------------- */
 	useEffect(() => {
 		const loadVendorData = async () => {
 			try {
 				setDataLoading(true);
 				setError('');
 
-				const response = await vendorAPI.getDashboardStats();
+				const { data } = await vendorAPI.getDashboardStats();
+				const user = data?.vendor || data?.data?.vendor;
+				if (!user) throw new Error('Vendor profile not found.');
 
-				let userData;
-				if (response.data?.data?.vendor) {
-					userData = response.data.data.vendor;
-				} else if (response.data?.vendor) {
-					userData = response.data.vendor;
-				} else {
-					throw new Error('Invalid response structure');
-				}
+				setVendorData(user);
 
-				if (!userData) {
-					setError('Vendor profile not found.');
-					return;
-				}
-
-				setVendorData(userData);
-
-				// ✅ Safely populate form data
-				const safeFormData = {
-					name: String(userData.name || ''),
-					title: String(userData.title || ''),
-					email: String(userData.email || ''),
-					phone: String(userData.phone || ''),
-					professionType: String(userData.professionType || ''),
-					license: String(userData.license || ''),
-					about: String(userData.about || ''),
+				setFormData({
+					name: user.name || '',
+					title: user.title || '',
+					email: user.email || '',
+					phone: user.phone || '',
+					professionType: user.professionType || '',
+					license: user.license || '',
+					about: user.about || '',
 					location: {
-						pincode: String(userData.location?.pincode || ''),
-						city: String(userData.location?.city || ''),
-						state: String(userData.location?.state || ''),
-						geo: userData.location?.geo || {
-							type: 'Point',
-							coordinates: [0, 0],
-						},
+						pincode: user.location?.pincode || '',
+						city: user.location?.city || '',
+						state: user.location?.state || '',
+						geo: user.location?.geo || { type: 'Point', coordinates: [0, 0] },
 					},
-					categories: Array.isArray(userData.categories)
-						? userData.categories
-						: [],
-					projectTypes: Array.isArray(userData.projectTypes)
-						? userData.projectTypes
-						: [],
-					styles: Array.isArray(userData.styles) ? userData.styles : [],
-					businessHighlights: Array.isArray(userData.businessHighlights)
-						? userData.businessHighlights
-						: [],
-					languages: Array.isArray(userData.languages)
-						? userData.languages
-						: [],
-					budgetLevel: String(userData.budgetLevel || 'Medium'),
+					categories: user.categories || [],
+					projectTypes: user.projectTypes || [],
+					styles: user.styles || [],
+					businessHighlights: user.businessHighlights || [],
+					languages: user.languages || [],
+					budgetLevel: user.budgetLevel || 'Medium',
 					images: {
-						profileImage: String(userData.images?.profileImage || ''),
-						coverImage: String(userData.images?.coverImage || ''),
-						portfolio: Array.isArray(userData.images?.portfolio)
-							? userData.images.portfolio
-							: [],
+						profileImage: user.images?.profileImage || '',
+						coverImage: user.images?.coverImage || '',
+						portfolio: user.images?.portfolio || [],
 					},
-					credentials: String(userData.credentials || ''),
-					rating: Number(userData.rating) || 0,
-					reviewCount: Number(userData.reviewCount) || 0,
-					status: String(userData.status || 'pending'),
-				};
-
-				setFormData(safeFormData);
+					credentials: user.credentials || '',
+					rating: +user.rating || 0,
+					reviewCount: +user.reviewCount || 0,
+					status: user.status || 'pending',
+				});
 			} catch (err) {
-				console.error('Error loading vendor data:', err);
 				setError(
-					err.response?.data?.message ||
-						err.message ||
-						'Failed to load profile data'
+					err.response?.data?.message || err.message || 'Failed to load profile'
 				);
 			} finally {
 				setDataLoading(false);
@@ -229,74 +219,111 @@ const VendorProfile = () => {
 		loadVendorData();
 	}, [setVendorData]);
 
-	// ✅ Handle input changes
+	/* -------------------------------------------------------------------- */
+	/*                        GENERAL STATE HANDLERS                        */
+	/* -------------------------------------------------------------------- */
 	const handleInputChange = (field, value) => {
 		if (!editMode) return;
-
 		setUnsavedChanges(true);
 
 		if (field.includes('.')) {
-			const fieldParts = field.split('.');
+			const parts = field.split('.');
 			setFormData((prev) => {
-				const newData = { ...prev };
-				let current = newData;
-
-				for (let i = 0; i < fieldParts.length - 1; i++) {
-					current[fieldParts[i]] = { ...current[fieldParts[i]] };
-					current = current[fieldParts[i]];
+				const updated = { ...prev };
+				let current = updated;
+				for (let i = 0; i < parts.length - 1; i++) {
+					current[parts[i]] = { ...current[parts[i]] };
+					current = current[parts[i]];
 				}
-
-				current[fieldParts[fieldParts.length - 1]] =
-					value != null ? String(value) : '';
-				return newData;
+				current[parts.at(-1)] = value;
+				return updated;
 			});
 		} else {
-			setFormData((prev) => ({
-				...prev,
-				[field]: value != null ? String(value) : '',
-			}));
+			setFormData((prev) => ({ ...prev, [field]: value }));
 		}
 	};
 
-	// ✅ Handle array changes (checkboxes)
 	const handleArrayChange = (field, value, checked) => {
 		if (!editMode) return;
-
 		setUnsavedChanges(true);
+
 		setFormData((prev) => ({
 			...prev,
 			[field]: checked
-				? [...(prev[field] || []), value]
-				: (prev[field] || []).filter((item) => item !== value),
+				? [...prev[field], value]
+				: prev[field].filter((v) => v !== value),
 		}));
 	};
 
-	// ✅ Add new items to arrays
 	const addToArray = (field, value, setter) => {
 		if (!editMode || !value.trim()) return;
+		setUnsavedChanges(true);
 
-		const trimmedValue = value.trim();
 		setFormData((prev) => ({
 			...prev,
-			[field]: [...(prev[field] || []), trimmedValue],
+			[field]: [...prev[field], value.trim()],
 		}));
 		setter('');
-		setUnsavedChanges(true);
 	};
 
-	// ✅ Remove items from arrays
 	const removeFromArray = (field, index) => {
 		if (!editMode) return;
+		setUnsavedChanges(true);
 
 		setFormData((prev) => ({
 			...prev,
 			[field]: prev[field].filter((_, i) => i !== index),
 		}));
-		setUnsavedChanges(true);
 	};
 
-	// ✅ Handle form submission
-	const handleSubmit = async (e) => {
+	/* -------------------------------------------------------------------- */
+	/*                        IMAGE UPLOAD HANDLERS                         */
+	/* -------------------------------------------------------------------- */
+	const handleImageUpload = async (file, imageType) => {
+		try {
+			setImageUploading((prev) => ({ ...prev, [imageType]: true }));
+			setError('');
+
+			console.log(`🔄 Uploading ${imageType} image:`, file.name);
+
+			// Use the same uploadAPI that ImageUpload component uses
+			const response = await uploadAPI.uploadImage(file);
+			console.log('✅ Upload response:', response.data);
+
+			// Handle response structure like ImageUpload component
+			let uploadedUrl;
+			if (response.data?.success && response.data?.url) {
+				uploadedUrl = response.data.url;
+			} else if (response.data?.url) {
+				uploadedUrl = response.data.url;
+			} else if (response.data?.secure_url) {
+				uploadedUrl = response.data.secure_url;
+			} else if (typeof response.data === 'string') {
+				uploadedUrl = response.data;
+			} else {
+				throw new Error('Invalid response from upload server');
+			}
+
+			console.log(`✅ ${imageType} image uploaded successfully:`, uploadedUrl);
+
+			// Update form data with the uploaded URL
+			if (imageType === 'profile') {
+				handleInputChange('images.profileImage', uploadedUrl);
+			} else if (imageType === 'cover') {
+				handleInputChange('images.coverImage', uploadedUrl);
+			}
+
+			return uploadedUrl;
+		} catch (error) {
+			console.error(`❌ ${imageType} image upload failed:`, error);
+			setError(`Failed to upload ${imageType} image: ${error.message}`);
+			throw error;
+		} finally {
+			setImageUploading((prev) => ({ ...prev, [imageType]: false }));
+		}
+	};
+
+	const saveProfile = async (e) => {
 		e.preventDefault();
 		if (!editMode) return;
 
@@ -305,119 +332,61 @@ const VendorProfile = () => {
 		setSuccess('');
 
 		try {
-			// ✅ Prepare data for submission
-			const submitData = {
-				name: String(formData.name || '').trim(),
-				title: String(formData.title || '').trim(),
-				email: String(formData.email || '')
-					.trim()
-					.toLowerCase(),
-				phone: String(formData.phone || '').trim(),
-				professionType: String(formData.professionType || ''),
-				license: String(formData.license || '').trim(),
-				about: String(formData.about || '').trim(),
-				budgetLevel: String(formData.budgetLevel || 'Medium'),
+			const payload = {
+				...formData,
+				email: formData.email.trim().toLowerCase(),
 				location: {
-					city: String(formData.location?.city || '').trim(),
-					state: String(formData.location?.state || '').trim(),
-					pincode: String(formData.location?.pincode || '').trim(),
-					...(formData.location?.geo && { geo: formData.location.geo }),
+					...formData.location,
+					city: formData.location.city.trim(),
+					state: formData.location.state.trim(),
+					pincode: formData.location.pincode.trim(),
 				},
-				categories: Array.isArray(formData.categories)
-					? formData.categories
-					: [],
-				projectTypes: Array.isArray(formData.projectTypes)
-					? formData.projectTypes
-					: [],
-				styles: Array.isArray(formData.styles) ? formData.styles : [],
-				languages: Array.isArray(formData.languages) ? formData.languages : [],
-				businessHighlights: Array.isArray(formData.businessHighlights)
-					? formData.businessHighlights
-					: [],
-				images: {
-					profileImage: String(formData.images?.profileImage || '').trim(),
-					coverImage: String(formData.images?.coverImage || '').trim(),
-					portfolio: Array.isArray(formData.images?.portfolio)
-						? formData.images.portfolio
-						: [],
-				},
-				// ✅ Fix credentials - convert string to array
-				credentials: Array.isArray(formData.credentials)
-					? formData.credentials
-					: formData.credentials
-					? [formData.credentials]
-					: [],
 			};
 
-			console.log('🔄 Updating vendor profile with data:', submitData);
+			const { data } = await vendorAPI.updateProfile(payload);
+			const updated = data?.vendor || data?.data?.vendor;
+			if (!updated) throw new Error('Invalid server response.');
 
-			// ✅ Call the API
-			const response = await vendorAPI.updateProfile(submitData);
+			setVendorData(updated);
+			apiUtils.updateCachedProfile(updated);
 
-			// ✅ Handle response
-			let updatedVendor;
-			if (response.data?.data?.vendor) {
-				updatedVendor = response.data.data.vendor;
-			} else if (response.data?.vendor) {
-				updatedVendor = response.data.vendor;
-			} else {
-				throw new Error('Invalid response structure from server');
-			}
-
-			// ✅ Update all state
-			setVendorData(updatedVendor);
+			// Update formData with the response to ensure sync
 			setFormData({
-				name: String(updatedVendor.name || ''),
-				title: String(updatedVendor.title || ''),
-				email: String(updatedVendor.email || ''),
-				phone: String(updatedVendor.phone || ''),
-				professionType: String(updatedVendor.professionType || ''),
-				license: String(updatedVendor.license || ''),
-				about: String(updatedVendor.about || ''),
+				name: updated.name || '',
+				title: updated.title || '',
+				email: updated.email || '',
+				phone: updated.phone || '',
+				professionType: updated.professionType || '',
+				license: updated.license || '',
+				about: updated.about || '',
 				location: {
-					pincode: String(updatedVendor.location?.pincode || ''),
-					city: String(updatedVendor.location?.city || ''),
-					state: String(updatedVendor.location?.state || ''),
-					geo: updatedVendor.location?.geo || {
-						type: 'Point',
-						coordinates: [0, 0],
-					},
+					pincode: updated.location?.pincode || '',
+					city: updated.location?.city || '',
+					state: updated.location?.state || '',
+					geo: updated.location?.geo || { type: 'Point', coordinates: [0, 0] },
 				},
-				categories: Array.isArray(updatedVendor.categories)
-					? updatedVendor.categories
-					: [],
-				projectTypes: Array.isArray(updatedVendor.projectTypes)
-					? updatedVendor.projectTypes
-					: [],
-				styles: Array.isArray(updatedVendor.styles) ? updatedVendor.styles : [],
-				businessHighlights: Array.isArray(updatedVendor.businessHighlights)
-					? updatedVendor.businessHighlights
-					: [],
-				languages: Array.isArray(updatedVendor.languages)
-					? updatedVendor.languages
-					: [],
-				budgetLevel: String(updatedVendor.budgetLevel || 'Medium'),
+				categories: updated.categories || [],
+				projectTypes: updated.projectTypes || [],
+				styles: updated.styles || [],
+				businessHighlights: updated.businessHighlights || [],
+				languages: updated.languages || [],
+				budgetLevel: updated.budgetLevel || 'Medium',
 				images: {
-					profileImage: String(updatedVendor.images?.profileImage || ''),
-					coverImage: String(updatedVendor.images?.coverImage || ''),
-					portfolio: Array.isArray(updatedVendor.images?.portfolio)
-						? updatedVendor.images.portfolio
-						: [],
+					profileImage: updated.images?.profileImage || '',
+					coverImage: updated.images?.coverImage || '',
+					portfolio: updated.images?.portfolio || [],
 				},
-				credentials: String(updatedVendor.credentials || ''),
-				rating: Number(updatedVendor.rating) || 0,
-				reviewCount: Number(updatedVendor.reviewCount) || 0,
-				status: String(updatedVendor.status || 'pending'),
+				credentials: updated.credentials || '',
+				rating: +updated.rating || 0,
+				reviewCount: +updated.reviewCount || 0,
+				status: updated.status || 'pending',
 			});
 
-			apiUtils.updateCachedProfile(updatedVendor);
 			setEditMode(false);
 			setUnsavedChanges(false);
 			setSuccess('Profile updated successfully!');
-
-			setTimeout(() => setSuccess(''), 5000);
+			setTimeout(() => setSuccess(''), 4000);
 		} catch (err) {
-			console.error('Profile update error:', err);
 			setError(
 				err.response?.data?.message || err.message || 'Failed to update profile'
 			);
@@ -426,48 +395,194 @@ const VendorProfile = () => {
 		}
 	};
 
+	/* -------------------------------------------------------------------- */
+	/*                               RENDER                                 */
+	/* -------------------------------------------------------------------- */
+
 	if (dataLoading) {
 		return (
 			<div className="flex items-center justify-center h-64">
 				<div className="text-center">
 					<div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-					<p className="text-gray-600">Loading profile data...</p>
+					<p className="text-gray-600">Loading profile data…</p>
 				</div>
 			</div>
 		);
 	}
 
+	/* ---------- helper: user initials ---------- */
+	const initials = (name) =>
+		name
+			?.split(' ')
+			.map((n) => n[0])
+			.join('')
+			.toUpperCase()
+			.slice(0, 2) || 'U';
+
 	return (
 		<div className="max-w-4xl mx-auto space-y-6">
-			{/* Header */}
-			<div className="flex items-center justify-between">
-				<div>
-					<h1 className="text-2xl font-bold text-gray-900">Profile Settings</h1>
-					<p className="text-gray-600">
-						{editMode
-							? 'Edit your professional profile'
-							: 'View your professional profile'}
-					</p>
-				</div>
-				<div className="flex items-center space-x-4">
-					<div className="flex items-center space-x-2">
-						<Badge variant="outline">⭐ {formData.rating.toFixed(1)}/5</Badge>
-						<Badge variant="outline">{formData.reviewCount} reviews</Badge>
+			{/* ------------------------------------------------------------------ */}
+			{/*                     YOUTUBE-STYLE HEADER SECTION                    */}
+			{/* ------------------------------------------------------------------ */}
+			<div className="relative mb-6 rounded-lg overflow-hidden shadow-lg">
+				{/* Cover */}
+				<div className="relative h-48 md:h-64 bg-gradient-to-r from-blue-600 to-purple-600">
+					{formData.images.coverImage && (
+						<img
+							src={formData.images.coverImage}
+							alt="Cover"
+							className="w-full h-full object-cover"
+							onError={(e) => (e.currentTarget.style.display = 'none')}
+						/>
+					)}
+					{editMode && (
+						<Button
+							size="sm"
+							variant="secondary"
+							className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white border-none"
+							disabled={imageUploading.cover}
+							onClick={() =>
+								document.getElementById('cover-image-input')?.click()
+							}>
+							<Camera className="h-4 w-4 mr-2" />
+							{imageUploading.cover ? 'Uploading...' : 'Edit Cover'}
+						</Button>
+					)}
+					{/* Profile pic */}
+					<div className="absolute -bottom-16 left-6 md:left-8">
+						<div className="relative">
+							<div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
+								{formData.images.profileImage ? (
+									<img
+										src={formData.images.profileImage}
+										alt={formData.name}
+										className="w-full h-full object-cover"
+										onError={(e) => (e.currentTarget.style.display = 'none')}
+									/>
+								) : (
+									<div className="w-full h-full flex items-center justify-center bg-blue-600">
+										<span className="text-white text-3xl font-bold">
+											{initials(formData.name)}
+										</span>
+									</div>
+								)}
+							</div>
+
+							{editMode && (
+								<Button
+									size="sm"
+									variant="secondary"
+									className="absolute bottom-2 right-2 w-8 h-8 p-0 rounded-full bg-blue-600 hover:bg-blue-700 text-white border-2 border-white"
+									disabled={imageUploading.profile}
+									onClick={() =>
+										document.getElementById('profile-image-input')?.click()
+									}>
+									<Camera className="h-4 w-4" />
+								</Button>
+							)}
+
+							{/* Upload loading indicator */}
+							{imageUploading.profile && (
+								<div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+									<div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent"></div>
+								</div>
+							)}
+						</div>
 					</div>
-					<Button
-						onClick={() => setEditMode(!editMode)}
-						variant={editMode ? 'outline' : 'default'}>
-						<Edit3 className="h-4 w-4 mr-2" />
-						{editMode ? 'Cancel Edit' : 'Edit Profile'}
-					</Button>
 				</div>
+
+				{/* Cover upload loading indicator */}
+				{imageUploading.cover && (
+					<div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+						<div className="bg-white/90 rounded-lg p-4 flex items-center gap-3">
+							<div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent"></div>
+							<span className="text-gray-900">Uploading cover image...</span>
+						</div>
+					</div>
+				)}
+
+				{/* Info Row */}
+				<div className="pt-20 pb-6 px-6 md:px-8 bg-white">
+					<div className="flex flex-col md:flex-row md:items-end md:justify-between">
+						<div>
+							<h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+								{formData.name}
+							</h1>
+							<p className="text-lg text-gray-600 mb-2">{formData.title}</p>
+							<p className="text-gray-500 mb-4">
+								{formData.professionType} • {formData.location.city},{' '}
+								{formData.location.state}
+							</p>
+							<div className="flex items-center space-x-4 text-sm text-gray-600">
+								<span className="flex items-center gap-1">
+									<Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+									{formData.rating.toFixed(1)} / 5
+								</span>
+								<span>{formData.reviewCount} reviews</span>
+							</div>
+						</div>
+
+						{editMode ? (
+							<Button
+								onClick={() => {
+									setEditMode(false);
+									setUnsavedChanges(false);
+								}}
+								variant="outline">
+								<X className="h-4 w-4 mr-2" /> Cancel
+							</Button>
+						) : (
+							<Button onClick={() => setEditMode(true)}>
+								<Edit3 className="h-4 w-4 mr-2" /> Edit Profile
+							</Button>
+						)}
+					</div>
+				</div>
+
+				{/* Hidden file inputs for backend upload */}
+				<input
+					id="cover-image-input"
+					type="file"
+					accept="image/*"
+					hidden
+					onChange={async (e) => {
+						const file = e.target.files?.[0];
+						if (file) {
+							try {
+								await handleImageUpload(file, 'cover');
+							} catch (error) {
+								console.error('Cover image upload error:', error);
+							}
+						}
+						e.target.value = ''; // Reset input
+					}}
+				/>
+				<input
+					id="profile-image-input"
+					type="file"
+					accept="image/*"
+					hidden
+					onChange={async (e) => {
+						const file = e.target.files?.[0];
+						if (file) {
+							try {
+								await handleImageUpload(file, 'profile');
+							} catch (error) {
+								console.error('Profile image upload error:', error);
+							}
+						}
+						e.target.value = ''; // Reset input
+					}}
+				/>
 			</div>
 
-			{/* Messages */}
+			{/* ------------------------------------------------------------------ */}
+			{/*                       STATUS / SUCCESS / ERROR                     */}
+			{/* ------------------------------------------------------------------ */}
 			{error && (
 				<Card className="border-red-200 bg-red-50">
 					<CardContent className="pt-6">
-						<div className="flex items-center space-x-2 text-red-600">
+						<div className="flex items-center text-red-600 gap-2">
 							<AlertCircle className="h-5 w-5" />
 							<span>{error}</span>
 						</div>
@@ -478,7 +593,7 @@ const VendorProfile = () => {
 			{success && (
 				<Card className="border-green-200 bg-green-50">
 					<CardContent className="pt-6">
-						<div className="flex items-center space-x-2 text-green-600">
+						<div className="flex items-center text-green-600 gap-2">
 							<CheckCircle className="h-5 w-5" />
 							<span>{success}</span>
 						</div>
@@ -486,7 +601,10 @@ const VendorProfile = () => {
 				</Card>
 			)}
 
-			<form onSubmit={handleSubmit} className="space-y-6">
+			{/* ------------------------------------------------------------------ */}
+			{/*                          MAIN EDIT FORM                            */}
+			{/* ------------------------------------------------------------------ */}
+			<form onSubmit={saveProfile} className="space-y-6">
 				{/* Personal Information */}
 				<Card>
 					<CardHeader>
@@ -495,36 +613,30 @@ const VendorProfile = () => {
 					<CardContent className="space-y-4">
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<Label htmlFor="name">Full Name *</Label>
+								<Label>Full Name *</Label>
 								<Input
-									id="name"
 									value={formData.name}
 									onChange={(e) => handleInputChange('name', e.target.value)}
-									placeholder="Your full name"
 									disabled={!editMode}
 									required
 								/>
 							</div>
 							<div>
-								<Label htmlFor="email">Email *</Label>
+								<Label>Email *</Label>
 								<Input
-									id="email"
 									type="email"
 									value={formData.email}
 									onChange={(e) => handleInputChange('email', e.target.value)}
-									placeholder="your@email.com"
 									disabled={!editMode}
 									required
 								/>
 							</div>
 						</div>
 						<div>
-							<Label htmlFor="phone">Phone Number</Label>
+							<Label>Phone</Label>
 							<Input
-								id="phone"
 								value={formData.phone}
 								onChange={(e) => handleInputChange('phone', e.target.value)}
-								placeholder="+91 98765 43210"
 								disabled={!editMode}
 							/>
 						</div>
@@ -538,510 +650,416 @@ const VendorProfile = () => {
 					</CardHeader>
 					<CardContent className="space-y-4">
 						<div>
-							<Label htmlFor="title">Company/Business Name *</Label>
+							<Label>Company Name *</Label>
 							<Input
-								id="title"
 								value={formData.title}
 								onChange={(e) => handleInputChange('title', e.target.value)}
-								placeholder="Your business name"
 								disabled={!editMode}
 								required
 							/>
 						</div>
-
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
-								<Label htmlFor="professionType">Profession Type *</Label>
+								<Label>Profession Type *</Label>
 								<Select
 									value={formData.professionType}
-									onValueChange={(value) =>
-										handleInputChange('professionType', value)
-									}
+									onValueChange={(v) => handleInputChange('professionType', v)}
 									disabled={!editMode}>
 									<SelectTrigger>
 										<SelectValue placeholder="Select profession" />
 									</SelectTrigger>
 									<SelectContent>
-										{professionTypes.map((type) => (
-											<SelectItem key={type} value={type}>
-												{type}
+										{professionTypes.map((t) => (
+											<SelectItem key={t} value={t}>
+												{t}
 											</SelectItem>
 										))}
 									</SelectContent>
 								</Select>
 							</div>
-
 							<div>
-								<Label htmlFor="license">License Number</Label>
+								<Label>License Number</Label>
 								<Input
-									id="license"
 									value={formData.license}
 									onChange={(e) => handleInputChange('license', e.target.value)}
-									placeholder="Your license number"
 									disabled={!editMode}
 								/>
 							</div>
 						</div>
-
 						<div>
-							<Label htmlFor="about">About Your Business</Label>
+							<Label>About</Label>
 							<Textarea
-								id="about"
+								rows={4}
 								value={formData.about}
 								onChange={(e) => handleInputChange('about', e.target.value)}
-								placeholder="Describe your business and expertise"
-								rows={4}
 								disabled={!editMode}
 							/>
 						</div>
 					</CardContent>
 				</Card>
 
-				{/* Location Information */}
+				{/* Location */}
 				<Card>
 					<CardHeader>
 						<CardTitle>Location</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-							<div>
-								<Label htmlFor="city">City *</Label>
-								<Input
-									id="city"
-									value={formData.location.city}
-									onChange={(e) =>
-										handleInputChange('location.city', e.target.value)
-									}
-									placeholder="Your city"
-									disabled={!editMode}
-									required
-								/>
-							</div>
-							<div>
-								<Label htmlFor="state">State *</Label>
-								<Input
-									id="state"
-									value={formData.location.state}
-									onChange={(e) =>
-										handleInputChange('location.state', e.target.value)
-									}
-									placeholder="Your state"
-									disabled={!editMode}
-									required
-								/>
-							</div>
-							<div>
-								<Label htmlFor="pincode">Pincode *</Label>
-								<Input
-									id="pincode"
-									value={formData.location.pincode}
-									onChange={(e) =>
-										handleInputChange('location.pincode', e.target.value)
-									}
-									placeholder="123456"
-									disabled={!editMode}
-									required
-								/>
-							</div>
+							<Input
+								placeholder="City"
+								value={formData.location.city}
+								onChange={(e) =>
+									handleInputChange('location.city', e.target.value)
+								}
+								disabled={!editMode}
+								required
+							/>
+							<Input
+								placeholder="State"
+								value={formData.location.state}
+								onChange={(e) =>
+									handleInputChange('location.state', e.target.value)
+								}
+								disabled={!editMode}
+								required
+							/>
+							<Input
+								placeholder="Pincode"
+								value={formData.location.pincode}
+								onChange={(e) =>
+									handleInputChange('location.pincode', e.target.value)
+								}
+								disabled={!editMode}
+								required
+							/>
 						</div>
 					</CardContent>
 				</Card>
 
-				{/* ✅ Service Categories */}
+				{/* Categories */}
 				<Card>
 					<CardHeader>
 						<CardTitle>Service Categories</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-							{categoryOptions.map((category) => (
-								<div key={category} className="flex items-center space-x-2">
+							{categoryOptions.map((cat) => (
+								<div key={cat} className="flex items-center gap-2">
 									<Checkbox
-										id={category}
-										checked={formData.categories.includes(category)}
-										onCheckedChange={(checked) =>
-											handleArrayChange('categories', category, checked)
+										checked={formData.categories.includes(cat)}
+										onCheckedChange={(c) =>
+											handleArrayChange('categories', cat, c)
 										}
 										disabled={!editMode}
 									/>
-									<Label htmlFor={category} className="text-sm">
-										{category}
-									</Label>
+									<Label className="text-sm">{cat}</Label>
 								</div>
 							))}
 						</div>
 
-						{/* ✅ Add Custom Category */}
 						{editMode && (
-							<div className="mt-4 p-4 bg-gray-50 rounded-lg">
-								<Label className="text-sm font-medium mb-2 block">
-									Add Custom Category
-								</Label>
-								<div className="flex space-x-2">
-									<Input
-										placeholder="Enter custom category"
-										value={newCategory}
-										onChange={(e) => setNewCategory(e.target.value)}
-										onKeyPress={(e) => {
-											if (e.key === 'Enter') {
-												e.preventDefault();
-												addToArray('categories', newCategory, setNewCategory);
-											}
-										}}
-									/>
-									<Button
-										type="button"
-										onClick={() =>
-											addToArray('categories', newCategory, setNewCategory)
-										}>
-										<Plus className="h-4 w-4" />
-									</Button>
-								</div>
+							<div className="flex gap-2 mt-4">
+								<Input
+									placeholder="Custom category"
+									value={newCategory}
+									onChange={(e) => setNewCategory(e.target.value)}
+									onKeyPress={(e) => {
+										if (e.key === 'Enter') {
+											e.preventDefault();
+											addToArray('categories', newCategory, setNewCategory);
+										}
+									}}
+								/>
+								<Button
+									type="button"
+									onClick={() =>
+										addToArray('categories', newCategory, setNewCategory)
+									}>
+									<Plus className="h-4 w-4" />
+								</Button>
 							</div>
 						)}
 
-						{/* ✅ Show Selected Categories */}
 						{formData.categories.length > 0 && (
-							<div className="mt-4">
-								<Label className="text-sm font-medium mb-2 block">
-									Selected Categories:
-								</Label>
-								<div className="flex flex-wrap gap-2">
-									{formData.categories.map((category, index) => (
-										<Badge
-											key={index}
-											variant="secondary"
-											className="flex items-center gap-1">
-											{category}
-											{editMode && (
-												<button
-													type="button"
-													onClick={() => removeFromArray('categories', index)}
-													className="ml-1 text-red-600 hover:text-red-800">
-													<X className="h-3 w-3" />
-												</button>
-											)}
-										</Badge>
-									))}
-								</div>
+							<div className="flex flex-wrap gap-2 mt-2">
+								{formData.categories.map((c, i) => (
+									<Badge
+										key={i}
+										variant="secondary"
+										className="flex items-center gap-1">
+										{c}
+										{editMode && (
+											<button
+												type="button"
+												onClick={() => removeFromArray('categories', i)}>
+												<X className="h-3 w-3 text-red-600" />
+											</button>
+										)}
+									</Badge>
+								))}
 							</div>
 						)}
 					</CardContent>
 				</Card>
 
-				{/* ✅ Project Types */}
+				{/* Project Types */}
 				<Card>
 					<CardHeader>
 						<CardTitle>Project Types</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-							{projectTypeOptions.map((type) => (
-								<div key={type} className="flex items-center space-x-2">
+							{projectTypeOptions.map((p) => (
+								<div key={p} className="flex items-center gap-2">
 									<Checkbox
-										id={type}
-										checked={formData.projectTypes.includes(type)}
-										onCheckedChange={(checked) =>
-											handleArrayChange('projectTypes', type, checked)
+										checked={formData.projectTypes.includes(p)}
+										onCheckedChange={(c) =>
+											handleArrayChange('projectTypes', p, c)
 										}
 										disabled={!editMode}
 									/>
-									<Label htmlFor={type} className="text-sm">
-										{type}
-									</Label>
+									<Label className="text-sm">{p}</Label>
 								</div>
 							))}
 						</div>
 
 						{editMode && (
-							<div className="mt-4 p-4 bg-gray-50 rounded-lg">
-								<Label className="text-sm font-medium mb-2 block">
-									Add Custom Project Type
-								</Label>
-								<div className="flex space-x-2">
-									<Input
-										placeholder="Enter custom project type"
-										value={newProjectType}
-										onChange={(e) => setNewProjectType(e.target.value)}
-										onKeyPress={(e) => {
-											if (e.key === 'Enter') {
-												e.preventDefault();
-												addToArray(
-													'projectTypes',
-													newProjectType,
-													setNewProjectType
-												);
-											}
-										}}
-									/>
-									<Button
-										type="button"
-										onClick={() =>
+							<div className="flex gap-2 mt-4">
+								<Input
+									placeholder="Custom project type"
+									value={newProjectType}
+									onChange={(e) => setNewProjectType(e.target.value)}
+									onKeyPress={(e) => {
+										if (e.key === 'Enter') {
+											e.preventDefault();
 											addToArray(
 												'projectTypes',
 												newProjectType,
 												setNewProjectType
-											)
-										}>
-										<Plus className="h-4 w-4" />
-									</Button>
-								</div>
+											);
+										}
+									}}
+								/>
+								<Button
+									type="button"
+									onClick={() =>
+										addToArray(
+											'projectTypes',
+											newProjectType,
+											setNewProjectType
+										)
+									}>
+									<Plus className="h-4 w-4" />
+								</Button>
 							</div>
 						)}
 
 						{formData.projectTypes.length > 0 && (
-							<div className="mt-4">
-								<Label className="text-sm font-medium mb-2 block">
-									Selected Project Types:
-								</Label>
-								<div className="flex flex-wrap gap-2">
-									{formData.projectTypes.map((type, index) => (
-										<Badge
-											key={index}
-											variant="secondary"
-											className="flex items-center gap-1">
-											{type}
-											{editMode && (
-												<button
-													type="button"
-													onClick={() => removeFromArray('projectTypes', index)}
-													className="ml-1 text-red-600 hover:text-red-800">
-													<X className="h-3 w-3" />
-												</button>
-											)}
-										</Badge>
-									))}
-								</div>
+							<div className="flex flex-wrap gap-2 mt-2">
+								{formData.projectTypes.map((p, i) => (
+									<Badge
+										key={i}
+										variant="secondary"
+										className="flex items-center gap-1">
+										{p}
+										{editMode && (
+											<button
+												type="button"
+												onClick={() => removeFromArray('projectTypes', i)}>
+												<X className="h-3 w-3 text-red-600" />
+											</button>
+										)}
+									</Badge>
+								))}
 							</div>
 						)}
 					</CardContent>
 				</Card>
 
-				{/* ✅ Design Styles */}
+				{/* Styles */}
 				<Card>
 					<CardHeader>
 						<CardTitle>Design Styles</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-							{styleOptions.map((style) => (
-								<div key={style} className="flex items-center space-x-2">
+							{styleOptions.map((s) => (
+								<div key={s} className="flex items-center gap-2">
 									<Checkbox
-										id={style}
-										checked={formData.styles.includes(style)}
-										onCheckedChange={(checked) =>
-											handleArrayChange('styles', style, checked)
-										}
+										checked={formData.styles.includes(s)}
+										onCheckedChange={(c) => handleArrayChange('styles', s, c)}
 										disabled={!editMode}
 									/>
-									<Label htmlFor={style} className="text-sm">
-										{style}
-									</Label>
+									<Label className="text-sm">{s}</Label>
 								</div>
 							))}
 						</div>
 
 						{editMode && (
-							<div className="mt-4 p-4 bg-gray-50 rounded-lg">
-								<Label className="text-sm font-medium mb-2 block">
-									Add Custom Style
-								</Label>
-								<div className="flex space-x-2">
-									<Input
-										placeholder="Enter custom style"
-										value={newStyle}
-										onChange={(e) => setNewStyle(e.target.value)}
-										onKeyPress={(e) => {
-											if (e.key === 'Enter') {
-												e.preventDefault();
-												addToArray('styles', newStyle, setNewStyle);
-											}
-										}}
-									/>
-									<Button
-										type="button"
-										onClick={() => addToArray('styles', newStyle, setNewStyle)}>
-										<Plus className="h-4 w-4" />
-									</Button>
-								</div>
+							<div className="flex gap-2 mt-4">
+								<Input
+									placeholder="Custom style"
+									value={newStyle}
+									onChange={(e) => setNewStyle(e.target.value)}
+									onKeyPress={(e) => {
+										if (e.key === 'Enter') {
+											e.preventDefault();
+											addToArray('styles', newStyle, setNewStyle);
+										}
+									}}
+								/>
+								<Button
+									type="button"
+									onClick={() => addToArray('styles', newStyle, setNewStyle)}>
+									<Plus className="h-4 w-4" />
+								</Button>
 							</div>
 						)}
 
 						{formData.styles.length > 0 && (
-							<div className="mt-4">
-								<Label className="text-sm font-medium mb-2 block">
-									Selected Styles:
-								</Label>
-								<div className="flex flex-wrap gap-2">
-									{formData.styles.map((style, index) => (
-										<Badge
-											key={index}
-											variant="secondary"
-											className="flex items-center gap-1">
-											{style}
-											{editMode && (
-												<button
-													type="button"
-													onClick={() => removeFromArray('styles', index)}
-													className="ml-1 text-red-600 hover:text-red-800">
-													<X className="h-3 w-3" />
-												</button>
-											)}
-										</Badge>
-									))}
-								</div>
+							<div className="flex flex-wrap gap-2 mt-2">
+								{formData.styles.map((s, i) => (
+									<Badge
+										key={i}
+										variant="secondary"
+										className="flex items-center gap-1">
+										{s}
+										{editMode && (
+											<button
+												type="button"
+												onClick={() => removeFromArray('styles', i)}>
+												<X className="h-3 w-3 text-red-600" />
+											</button>
+										)}
+									</Badge>
+								))}
 							</div>
 						)}
 					</CardContent>
 				</Card>
 
-				{/* ✅ Languages */}
+				{/* Languages */}
 				<Card>
 					<CardHeader>
 						<CardTitle>Languages</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-							{languageOptions.map((language) => (
-								<div key={language} className="flex items-center space-x-2">
+							{languageOptions.map((l) => (
+								<div key={l} className="flex items-center gap-2">
 									<Checkbox
-										id={language}
-										checked={formData.languages.includes(language)}
-										onCheckedChange={(checked) =>
-											handleArrayChange('languages', language, checked)
+										checked={formData.languages.includes(l)}
+										onCheckedChange={(c) =>
+											handleArrayChange('languages', l, c)
 										}
 										disabled={!editMode}
 									/>
-									<Label htmlFor={language} className="text-sm">
-										{language}
-									</Label>
+									<Label className="text-sm">{l}</Label>
 								</div>
 							))}
 						</div>
 
 						{editMode && (
-							<div className="mt-4 p-4 bg-gray-50 rounded-lg">
-								<Label className="text-sm font-medium mb-2 block">
-									Add Custom Language
-								</Label>
-								<div className="flex space-x-2">
-									<Input
-										placeholder="Enter custom language"
-										value={newLanguage}
-										onChange={(e) => setNewLanguage(e.target.value)}
-										onKeyPress={(e) => {
-											if (e.key === 'Enter') {
-												e.preventDefault();
-												addToArray('languages', newLanguage, setNewLanguage);
-											}
-										}}
-									/>
-									<Button
-										type="button"
-										onClick={() =>
-											addToArray('languages', newLanguage, setNewLanguage)
-										}>
-										<Plus className="h-4 w-4" />
-									</Button>
-								</div>
+							<div className="flex gap-2 mt-4">
+								<Input
+									placeholder="Custom language"
+									value={newLanguage}
+									onChange={(e) => setNewLanguage(e.target.value)}
+									onKeyPress={(e) => {
+										if (e.key === 'Enter') {
+											e.preventDefault();
+											addToArray('languages', newLanguage, setNewLanguage);
+										}
+									}}
+								/>
+								<Button
+									type="button"
+									onClick={() =>
+										addToArray('languages', newLanguage, setNewLanguage)
+									}>
+									<Plus className="h-4 w-4" />
+								</Button>
 							</div>
 						)}
 
 						{formData.languages.length > 0 && (
-							<div className="mt-4">
-								<Label className="text-sm font-medium mb-2 block">
-									Selected Languages:
-								</Label>
-								<div className="flex flex-wrap gap-2">
-									{formData.languages.map((language, index) => (
-										<Badge
-											key={index}
-											variant="secondary"
-											className="flex items-center gap-1">
-											{language}
-											{editMode && (
-												<button
-													type="button"
-													onClick={() => removeFromArray('languages', index)}
-													className="ml-1 text-red-600 hover:text-red-800">
-													<X className="h-3 w-3" />
-												</button>
-											)}
-										</Badge>
-									))}
-								</div>
+							<div className="flex flex-wrap gap-2 mt-2">
+								{formData.languages.map((l, i) => (
+									<Badge
+										key={i}
+										variant="secondary"
+										className="flex items-center gap-1">
+										{l}
+										{editMode && (
+											<button
+												type="button"
+												onClick={() => removeFromArray('languages', i)}>
+												<X className="h-3 w-3 text-red-600" />
+											</button>
+										)}
+									</Badge>
+								))}
 							</div>
 						)}
 					</CardContent>
 				</Card>
 
-				{/* ✅ Business Highlights */}
+				{/* Business Highlights */}
 				<Card>
 					<CardHeader>
 						<CardTitle>Business Highlights</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
 						{editMode && (
-							<div className="p-4 bg-gray-50 rounded-lg">
-								<Label className="text-sm font-medium mb-2 block">
-									Add Business Highlight
-								</Label>
-								<div className="flex space-x-2">
-									<Input
-										placeholder="e.g., 500+ Happy Clients, Award Winning Design"
-										value={newHighlight}
-										onChange={(e) => setNewHighlight(e.target.value)}
-										onKeyPress={(e) => {
-											if (e.key === 'Enter') {
-												e.preventDefault();
-												addToArray(
-													'businessHighlights',
-													newHighlight,
-													setNewHighlight
-												);
-											}
-										}}
-									/>
-									<Button
-										type="button"
-										onClick={() =>
+							<div className="flex gap-2">
+								<Input
+									placeholder="Highlight"
+									value={newHighlight}
+									onChange={(e) => setNewHighlight(e.target.value)}
+									onKeyPress={(e) => {
+										if (e.key === 'Enter') {
+											e.preventDefault();
 											addToArray(
 												'businessHighlights',
 												newHighlight,
 												setNewHighlight
-											)
-										}>
-										<Plus className="h-4 w-4" />
-									</Button>
-								</div>
+											);
+										}
+									}}
+								/>
+								<Button
+									type="button"
+									onClick={() =>
+										addToArray(
+											'businessHighlights',
+											newHighlight,
+											setNewHighlight
+										)
+									}>
+									<Plus className="h-4 w-4" />
+								</Button>
 							</div>
 						)}
 
 						{formData.businessHighlights.length > 0 && (
-							<div>
-								<Label className="text-sm font-medium mb-2 block">
-									Current Highlights:
-								</Label>
-								<div className="flex flex-wrap gap-2">
-									{formData.businessHighlights.map((highlight, index) => (
-										<Badge
-											key={index}
-											variant="secondary"
-											className="flex items-center gap-1">
-											{highlight}
-											{editMode && (
-												<button
-													type="button"
-													onClick={() =>
-														removeFromArray('businessHighlights', index)
-													}
-													className="ml-1 text-red-600 hover:text-red-800">
-													<X className="h-3 w-3" />
-												</button>
-											)}
-										</Badge>
-									))}
-								</div>
+							<div className="flex flex-wrap gap-2">
+								{formData.businessHighlights.map((h, i) => (
+									<Badge
+										key={i}
+										variant="secondary"
+										className="flex items-center gap-1">
+										{h}
+										{editMode && (
+											<button
+												type="button"
+												onClick={() =>
+													removeFromArray('businessHighlights', i)
+												}>
+												<X className="h-3 w-3 text-red-600" />
+											</button>
+										)}
+									</Badge>
+								))}
 							</div>
 						)}
 					</CardContent>
@@ -1055,15 +1073,15 @@ const VendorProfile = () => {
 					<CardContent>
 						<Select
 							value={formData.budgetLevel}
-							onValueChange={(value) => handleInputChange('budgetLevel', value)}
+							onValueChange={(v) => handleInputChange('budgetLevel', v)}
 							disabled={!editMode}>
 							<SelectTrigger>
-								<SelectValue placeholder="Select budget range" />
+								<SelectValue placeholder="Select budget" />
 							</SelectTrigger>
 							<SelectContent>
-								{budgetLevelOptions.map((option) => (
-									<SelectItem key={option.value} value={option.value}>
-										{option.label}
+								{budgetLevelOptions.map((b) => (
+									<SelectItem key={b.value} value={b.value}>
+										{b.label}
 									</SelectItem>
 								))}
 							</SelectContent>
@@ -1071,37 +1089,9 @@ const VendorProfile = () => {
 					</CardContent>
 				</Card>
 
-				{/* ✅ Images */}
-				<Card>
-					<CardHeader>
-						<CardTitle>Profile Images</CardTitle>
-					</CardHeader>
-					<CardContent className="space-y-6">
-						<ImageUpload
-							label="Profile Image"
-							currentImage={formData.images.profileImage}
-							onImageChange={(url) =>
-								handleInputChange('images.profileImage', url)
-							}
-							type="profile"
-							className="w-full"
-						/>
-
-						<ImageUpload
-							label="Cover Image"
-							currentImage={formData.images.coverImage}
-							onImageChange={(url) =>
-								handleInputChange('images.coverImage', url)
-							}
-							type="cover"
-							className="w-full"
-						/>
-					</CardContent>
-				</Card>
-
-				{/* Submit Button */}
+				{/* Save / Cancel */}
 				{editMode && (
-					<div className="flex justify-end space-x-4">
+					<div className="flex justify-end gap-4">
 						<Button
 							type="button"
 							variant="outline"
@@ -1110,12 +1100,11 @@ const VendorProfile = () => {
 								setUnsavedChanges(false);
 							}}
 							disabled={loading}>
-							<X className="h-4 w-4 mr-2" />
-							Cancel
+							<X className="h-4 w-4 mr-2" /> Cancel
 						</Button>
-						<Button type="submit" disabled={loading} className="min-w-32">
+						<Button type="submit" disabled={loading || !unsavedChanges}>
 							<Save className="h-4 w-4 mr-2" />
-							{loading ? 'Saving...' : 'Save Changes'}
+							{loading ? 'Saving…' : 'Save Changes'}
 						</Button>
 					</div>
 				)}

@@ -7,7 +7,7 @@ import {
 	Routes,
 	useLocation,
 } from 'react-router-dom';
-
+import ServiceDetail from './components/ServiceDetail';
 // Components
 import DesignDetailPage from './DesignDetailPage';
 import DesignIdeasPage from './DesignIdeasPage';
@@ -116,6 +116,7 @@ function App() {
 						<Route path="messages" element={<VendorMessages />} />
 						<Route path="orders" element={<VendorOrders />} />
 						<Route path="reviews" element={<VendorReviews />} />
+						<Route path="service/:serviceId" element={<ServiceDetail />} />
 					</Route>
 
 					{/* Fallback Route */}
