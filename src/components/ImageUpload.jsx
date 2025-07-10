@@ -31,21 +31,24 @@ const ImageUpload = ({
 	const [dragActive, setDragActive] = useState(false);
 	const [uploading, setUploading] = useState(false);
 	const [imageUrl, setImageUrl] = useState(currentImage || '');
-	const [uploadMode, setUploadMode] = useState('url');
+	// ✅ FIX 1: Default to 'file' mode instead of 'url'
+	const [uploadMode, setUploadMode] = useState('file');
 	const [preview, setPreview] = useState(currentImage || '');
 	const [uploadProgress, setUploadProgress] = useState(0);
 	const [error, setError] = useState('');
 	const [imageLoadError, setImageLoadError] = useState(false);
+	const [imageLoaded, setImageLoaded] = useState(false);
 	const fileInputRef = useRef(null);
 
-	// Update preview when currentImage changes
+	// ✅ FIX 2: Simplified useEffect to prevent dependency loops
 	useEffect(() => {
-		if (currentImage !== preview) {
-			setPreview(currentImage || '');
-			setImageUrl(currentImage || '');
+		if (currentImage && currentImage !== preview) {
+			setPreview(currentImage);
+			setImageUrl(currentImage);
 			setImageLoadError(false);
+			setImageLoaded(false);
 		}
-	}, [currentImage, preview]);
+	}, [currentImage]); // Only depend on currentImage
 
 	const validateFile = useCallback(
 		(file) => {
@@ -83,7 +86,6 @@ const ImageUpload = ({
 		[maxSize, type]
 	);
 
-	// ✅ Fixed backend upload with proper error handling
 	const uploadToBackend = useCallback(async (file) => {
 		try {
 			console.log(
@@ -135,6 +137,7 @@ const ImageUpload = ({
 				setUploading(true);
 				setUploadProgress(0);
 				setImageLoadError(false);
+				setImageLoaded(false);
 
 				// Validate file
 				await validateFile(file);
@@ -156,20 +159,20 @@ const ImageUpload = ({
 				clearInterval(progressInterval);
 				setUploadProgress(100);
 
-				// Update preview and notify parent
-				setPreview(uploadedUrl);
-				onImageChange(uploadedUrl);
-
-				// Success feedback
+				// ✅ FIX 3: Wait a bit before setting preview to ensure backend file is ready
 				setTimeout(() => {
+					setPreview(uploadedUrl);
+					onImageChange(uploadedUrl);
+					setImageLoadError(false);
 					setUploadProgress(0);
-				}, 1000);
+				}, 500);
 
 				return uploadedUrl;
 			} catch (error) {
 				console.error('Upload error:', error);
 				setError(error.message);
 				setUploadProgress(0);
+				setImageLoadError(false);
 				throw error;
 			} finally {
 				setUploading(false);
@@ -229,6 +232,7 @@ const ImageUpload = ({
 
 		setError('');
 		setImageLoadError(false);
+		setImageLoaded(false);
 
 		if (!imageUrl.trim()) {
 			setError('Please enter a valid image URL');
@@ -250,10 +254,12 @@ const ImageUpload = ({
 			onImageChange(imageUrl);
 			setError('');
 			setImageLoadError(false);
+			setImageLoaded(true);
 		};
 		img.onerror = () => {
 			setError('Could not load image from this URL');
 			setImageLoadError(true);
+			setImageLoaded(false);
 		};
 		img.src = imageUrl;
 	}, [disabled, imageUrl, onImageChange]);
@@ -265,16 +271,36 @@ const ImageUpload = ({
 		setImageUrl('');
 		setError('');
 		setImageLoadError(false);
+		setImageLoaded(false);
 		onImageChange('');
 		if (fileInputRef.current) {
 			fileInputRef.current.value = '';
 		}
 	}, [disabled, onImageChange]);
 
-	// ✅ Fixed image error handler - don't show fallback image
-	const handleImageError = useCallback(() => {
-		setImageLoadError(true);
-		setError('Failed to load image. Please try uploading again.');
+	// ✅ FIX 4: More lenient image error handler with retry logic
+	const handleImageError = useCallback(
+		(e) => {
+			console.log('⚠️ Image failed to load:', e.target.src);
+
+			// Only show error if we've tried loading for a bit
+			setTimeout(() => {
+				if (!imageLoaded) {
+					console.log('❌ Setting image load error after timeout');
+					setImageLoadError(true);
+					setError('Image failed to load. Please try again.');
+				}
+			}, 2000); // Wait 2 seconds before showing error
+		},
+		[imageLoaded]
+	);
+
+	// ✅ FIX 5: Handle successful image load
+	const handleImageLoad = useCallback(() => {
+		console.log('✅ Image loaded successfully');
+		setImageLoaded(true);
+		setImageLoadError(false);
+		setError('');
 	}, []);
 
 	return (
@@ -413,62 +439,79 @@ const ImageUpload = ({
 				</div>
 			)}
 
-			{/* Image Preview */}
+			{/* ✅ FIX 6: Improved Image Preview with better error handling */}
 			{preview && !imageLoadError && (
 				<div className="relative">
 					<div className="relative group">
+						{/* ✅ Loading state while image loads */}
+						{!imageLoaded && (
+							<div className="absolute inset-0 bg-gray-100 rounded-lg flex items-center justify-center">
+								<Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+							</div>
+						)}
+
 						<img
 							src={preview}
 							alt="Preview"
 							className={`w-full object-cover rounded-lg border ${
 								type === 'profile' ? 'h-40' : 'h-48'
-							}`}
+							} ${
+								!imageLoaded ? 'opacity-0' : 'opacity-100'
+							} transition-opacity duration-300`}
+							onLoad={handleImageLoad}
 							onError={handleImageError}
+							crossOrigin="anonymous"
 						/>
 
-						{/* Image overlay with actions */}
-						<div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
-							<div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2">
-								<Button
-									type="button"
-									variant="secondary"
-									size="sm"
-									onClick={() => window.open(preview, '_blank')}
-									className="bg-white/90 hover:bg-white"
-									disabled={disabled}>
-									<ExternalLink className="h-4 w-4 mr-1" />
-									View
-								</Button>
-								<Button
-									type="button"
-									variant="destructive"
-									size="sm"
-									onClick={clearImage}
-									className="bg-red-500/90 hover:bg-red-500"
-									disabled={disabled}>
-									<Trash2 className="h-4 w-4 mr-1" />
-									Remove
-								</Button>
+						{/* Image overlay with actions - only show when image is loaded */}
+						{imageLoaded && (
+							<div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
+								<div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2">
+									<Button
+										type="button"
+										variant="secondary"
+										size="sm"
+										onClick={() => window.open(preview, '_blank')}
+										className="bg-white/90 hover:bg-white"
+										disabled={disabled}>
+										<ExternalLink className="h-4 w-4 mr-1" />
+										View
+									</Button>
+									<Button
+										type="button"
+										variant="destructive"
+										size="sm"
+										onClick={clearImage}
+										className="bg-red-500/90 hover:bg-red-500"
+										disabled={disabled}>
+										<Trash2 className="h-4 w-4 mr-1" />
+										Remove
+									</Button>
+								</div>
 							</div>
-						</div>
+						)}
 
 						{/* Clear button (always visible on mobile) */}
-						<Button
-							type="button"
-							variant="destructive"
-							size="sm"
-							onClick={clearImage}
-							className="absolute top-2 right-2 md:hidden"
-							disabled={disabled}>
-							<X className="h-4 w-4" />
-						</Button>
+						{imageLoaded && (
+							<Button
+								type="button"
+								variant="destructive"
+								size="sm"
+								onClick={clearImage}
+								className="absolute top-2 right-2 md:hidden"
+								disabled={disabled}>
+								<X className="h-4 w-4" />
+							</Button>
+						)}
 					</div>
 
-					{/* Image info */}
-					<div className="mt-2 text-xs text-gray-500">
-						<p>✓ Image uploaded successfully</p>
-						<p>📁 Stored on server</p>
-					</div>
+					{/* Image info - only show when loaded */}
+					{imageLoaded && (
+						<div className="mt-2 text-xs text-gray-500">
+							<p>✓ Image uploaded successfully</p>
+							<p>📁 Stored on server</p>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -479,17 +522,36 @@ const ImageUpload = ({
 						<CardContent className="flex flex-col items-center justify-center py-10">
 							<AlertCircle className="h-12 w-12 text-red-400 mb-2" />
 							<p className="text-sm text-red-600 text-center">
-								Failed to load image. Please try uploading again.
+								Image took too long to load. The upload might have succeeded -
+								try refreshing the page.
 							</p>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={clearImage}
-								className="mt-3">
-								<Trash2 className="h-4 w-4 mr-1" />
-								Clear and retry
-							</Button>
+							<div className="flex gap-2 mt-3">
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={() => {
+										setImageLoadError(false);
+										setImageLoaded(false);
+										// Try to reload the image
+										const img = new Image();
+										img.onload = () => setImageLoaded(true);
+										img.src = preview;
+									}}
+									className="text-xs">
+									<Upload className="h-4 w-4 mr-1" />
+									Retry
+								</Button>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={clearImage}
+									className="text-xs">
+									<Trash2 className="h-4 w-4 mr-1" />
+									Clear
+								</Button>
+							</div>
 						</CardContent>
 					</Card>
 				</div>

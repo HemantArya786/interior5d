@@ -1,3 +1,4 @@
+import { apiCache } from '@/utils/apiCache';
 import { useCallback, useEffect, useState } from 'react';
 import {
 	adminAPI,
@@ -47,42 +48,57 @@ export const useApi = (apiCall, dependencies = []) => {
 	return { data, loading, error, execute, refetch, reset };
 };
 
-// Enhanced useAuth hook with automatic token refresh
 export const useAuth = () => {
 	const [user, setUser] = useState(apiUtils.getCurrentUser());
 	const [loading, setLoading] = useState(false);
 	const [isInitialized, setIsInitialized] = useState(false);
 
-	// Initialize auth state on component mount
-	useEffect(() => {
-		const initializeAuth = async () => {
-			const token = localStorage.getItem('auth_token');
-			if (token && apiUtils.isTokenValid()) {
-				try {
-					const response = await authAPI.getProfile();
-					if (response.data.user) {
-						apiUtils.setCurrentUser(response.data.user);
-						setUser(response.data.user);
-					}
-				} catch (error) {
-					console.log('Token invalid, clearing auth:', error);
-					apiUtils.removeAuthToken();
-					setUser(null);
+	// ✅ Prevent multiple initialization calls using cache
+	const initializeAuth = useCallback(async () => {
+		if (isInitialized) return; // Prevent duplicate calls
+
+		console.log('🔍 AUTH: Initializing authentication...');
+
+		const token = localStorage.getItem('auth_token');
+		if (token && apiUtils.isTokenValid()) {
+			try {
+				// ✅ Use cache for profile requests
+				const response = await apiCache.deduplicate('/auth/profile', {}, () =>
+					authAPI.getProfile()
+				);
+
+				if (response.data.user) {
+					apiUtils.setCurrentUser(response.data.user);
+					setUser(response.data.user);
+					console.log('✅ AUTH: User authenticated from token');
 				}
-			} else if (token) {
-				// Token exists but is invalid
+			} catch (error) {
+				console.log('❌ AUTH: Token invalid, clearing auth:', error);
 				apiUtils.removeAuthToken();
 				setUser(null);
+				// Clear auth cache on invalid token
+				apiCache.clearByPattern('/auth');
 			}
-			setIsInitialized(true);
-		};
+		} else if (token) {
+			// Token exists but is invalid
+			console.log('⚠️ AUTH: Token exists but is invalid, clearing');
+			apiUtils.removeAuthToken();
+			setUser(null);
+			apiCache.clearByPattern('/auth');
+		}
+		setIsInitialized(true);
+		console.log('✅ AUTH: Authentication initialization completed');
+	}, [isInitialized]);
 
+	// ✅ Only initialize once on mount
+	useEffect(() => {
 		initializeAuth();
-	}, []);
+	}, []); // Empty dependency array to run only once
 
 	const login = async (credentials) => {
 		setLoading(true);
 		try {
+			console.log('🔍 AUTH: Attempting login...');
 			const response = await authAPI.login(credentials);
 			const { token, user } = response.data;
 
@@ -90,7 +106,14 @@ export const useAuth = () => {
 			apiUtils.setCurrentUser(user);
 			setUser(user);
 
+			// Clear auth cache after successful login
+			apiCache.clearByPattern('/auth');
+
+			console.log('✅ AUTH: Login successful');
 			return response.data;
+		} catch (error) {
+			console.error('❌ AUTH: Login failed:', error);
+			throw error;
 		} finally {
 			setLoading(false);
 		}
@@ -99,8 +122,13 @@ export const useAuth = () => {
 	const register = async (userData) => {
 		setLoading(true);
 		try {
+			console.log('🔍 AUTH: Attempting registration...');
 			const response = await authAPI.register(userData);
+			console.log('✅ AUTH: Registration successful');
 			return response.data;
+		} catch (error) {
+			console.error('❌ AUTH: Registration failed:', error);
+			throw error;
 		} finally {
 			setLoading(false);
 		}
@@ -109,40 +137,73 @@ export const useAuth = () => {
 	const logout = async () => {
 		setLoading(true);
 		try {
+			console.log('🔍 AUTH: Attempting logout...');
 			await authAPI.logout();
 		} catch (error) {
-			console.log('Logout error:', error);
+			console.log('⚠️ AUTH: Logout error (proceeding anyway):', error);
 		} finally {
 			apiUtils.removeAuthToken();
 			setUser(null);
 			setLoading(false);
+
+			// Clear all cache on logout
+			apiCache.clear();
+			console.log('✅ AUTH: Logout completed, cache cleared');
 		}
 	};
 
 	const updateProfile = async () => {
 		try {
+			console.log('🔍 AUTH: Updating profile...');
+
+			// Clear profile cache before fetching updated data
+			apiCache.clearByPattern('/auth/profile');
+
 			const response = await authAPI.getProfile();
 			const updatedUser = response.data.user;
 			apiUtils.setCurrentUser(updatedUser);
 			setUser(updatedUser);
+
+			console.log('✅ AUTH: Profile updated successfully');
 			return updatedUser;
 		} catch (error) {
-			console.error('Profile update error:', error);
+			console.error('❌ AUTH: Profile update error:', error);
 			throw error;
 		}
 	};
 
 	const refreshToken = async () => {
 		try {
+			console.log('🔍 AUTH: Refreshing token...');
 			const response = await authAPI.refreshToken();
 			const { token } = response.data;
 			apiUtils.setAuthToken(token);
+
+			// Clear auth cache after token refresh
+			apiCache.clearByPattern('/auth');
+
+			console.log('✅ AUTH: Token refreshed successfully');
 			return token;
 		} catch (error) {
+			console.error('❌ AUTH: Token refresh failed, logging out:', error);
 			logout();
 			throw error;
 		}
 	};
+
+	// ✅ Cached profile getter to prevent excessive calls
+	const getCachedProfile = useCallback(async () => {
+		if (!user) return null;
+
+		try {
+			return await apiCache.deduplicate('/auth/profile', {}, () =>
+				authAPI.getProfile().then((response) => response.data.user)
+			);
+		} catch (error) {
+			console.error('❌ AUTH: Error getting cached profile:', error);
+			return user; // Return current user if cache fails
+		}
+	}, [user]);
 
 	return {
 		user,
@@ -153,9 +214,11 @@ export const useAuth = () => {
 		logout,
 		updateProfile,
 		refreshToken,
+		getCachedProfile,
 		isAuthenticated: !!user && apiUtils.isAuthenticated(),
 	};
 };
+4;
 
 // Product hooks
 export const useProducts = (params = {}) => {
@@ -426,7 +489,7 @@ export const useDebouncedApi = (apiCall, delay = 500, dependencies = []) => {
 		}, delay);
 
 		return () => clearTimeout(timeoutId);
-	}, [...dependencies, delay]);
+	}, [apiCall, delay, ...dependencies]);
 
 	return {
 		data: debouncedData,

@@ -1,5 +1,5 @@
 import axios from 'axios';
-
+import { apiCache } from '../utils/apiCache';
 // Base API configuration
 const API_BASE_URL = 'http://localhost:5001/api';
 
@@ -211,64 +211,71 @@ export const vendorAPI = {
 };
 
 export const productAPI = {
-	// ✅ Get all products with filtering and pagination
 	getAll: (params = {}) => {
 		console.log('🔍 API: Getting all products with params:', params);
-		return api
-			.get('/products', { params })
-			.then((response) => {
-				console.log('✅ API: Products retrieved successfully:', response.data);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting products:', error);
-				throw error;
-			});
+		return apiCache.deduplicate('/products', params, () =>
+			api
+				.get('/products', { params })
+				.then((response) => {
+					console.log(
+						'✅ API: Products retrieved successfully:',
+						response.data
+					);
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting products:', error);
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Get single product by ID
+	// ✅ Get single product by ID (with caching)
 	getById: (id) => {
 		console.log('🔍 API: Getting product by ID:', id);
 		if (!id) {
 			console.error('❌ API: Product ID is required');
 			throw new Error('Product ID is required');
 		}
-		return api
-			.get(`/products/${id}`)
-			.then((response) => {
-				console.log('✅ API: Product retrieved successfully:', response.data);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting product:', error);
-				throw error;
-			});
+
+		return apiCache.deduplicate(`/products/${id}`, {}, () =>
+			api
+				.get(`/products/${id}`)
+				.then((response) => {
+					console.log('✅ API: Product retrieved successfully:', response.data);
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting product:', error);
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Get product categories
+	// ✅ Get product categories (with longer cache - they don't change often)
 	getCategories: () => {
 		console.log('🔍 API: Getting product categories');
-		return api
-			.get('/products/categories')
-			.then((response) => {
-				console.log(
-					'✅ API: Categories retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting categories:', error);
-				throw error;
-			});
+		return apiCache.deduplicate('/products/categories', {}, () =>
+			api
+				.get('/products/categories')
+				.then((response) => {
+					console.log(
+						'✅ API: Categories retrieved successfully:',
+						response.data
+					);
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting categories:', error);
+					throw error;
+				})
+		);
 	},
 
-	// ✅ CRITICAL FIX: Create service with JSON data instead of FormData
+	// ✅ Create service with JSON data (clears cache after creation)
 	create: (data) => {
 		console.log('🔍 API: Creating service with JSON data');
 		console.log('🔍 API: Data being sent:', JSON.stringify(data, null, 2));
-		console.log('🔍 API: Data type:', typeof data);
-		console.log('🔍 API: Data keys:', Object.keys(data));
 
 		// Validate required fields on frontend
 		const requiredFields = [
@@ -296,41 +303,32 @@ export const productAPI = {
 			})
 			.then((response) => {
 				console.log('✅ API: Service created successfully:', response.data);
+				// Clear relevant cache after creation
+				apiCache.clearByPattern('/products');
+				apiCache.clearByPattern('/products/vendor');
 				return response;
 			})
 			.catch((error) => {
 				console.error('❌ API: Error creating service:', error);
-				console.error('❌ API: Error response:', error.response);
-				console.error('❌ API: Error response data:', error.response?.data);
-				console.error('❌ API: Error status:', error.response?.status);
 				throw error;
 			});
 	},
 
-	// ✅ Separate method for file uploads when needed
+	// ✅ Create service with files (clears cache after creation)
 	createWithFiles: (data) => {
 		console.log('🔍 API: Creating service with file uploads');
-		console.log('🔍 API: Data contains files:', Object.keys(data));
 
 		const formData = new FormData();
 		Object.keys(data).forEach((key) => {
 			if (data[key] instanceof FileList) {
-				console.log(`🔍 API: Processing FileList for key: ${key}`);
-				Array.from(data[key]).forEach((file, index) => {
-					console.log(
-						`🔍 API: Adding file ${index + 1} for ${key}:`,
-						file.name
-					);
+				Array.from(data[key]).forEach((file) => {
 					formData.append(key, file);
 				});
 			} else if (data[key] instanceof File) {
-				console.log(`🔍 API: Processing File for key: ${key}`, data[key].name);
 				formData.append(key, data[key]);
 			} else if (typeof data[key] === 'object' && data[key] !== null) {
-				console.log(`🔍 API: Processing object for key: ${key}`);
 				formData.append(key, JSON.stringify(data[key]));
 			} else {
-				console.log(`🔍 API: Processing primitive for key: ${key}`);
 				formData.append(key, data[key]);
 			}
 		});
@@ -344,6 +342,8 @@ export const productAPI = {
 					'✅ API: Service with files created successfully:',
 					response.data
 				);
+				// Clear relevant cache after creation
+				apiCache.clearByPattern('/products');
 				return response;
 			})
 			.catch((error) => {
@@ -352,10 +352,9 @@ export const productAPI = {
 			});
 	},
 
-	// ✅ Update product with smart content-type detection
+	// ✅ Update product (clears cache after update)
 	update: (id, data) => {
 		console.log('🔍 API: Updating product:', id);
-		console.log('🔍 API: Update data:', data);
 
 		if (!id) {
 			console.error('❌ API: Product ID is required for update');
@@ -366,10 +365,9 @@ export const productAPI = {
 			(value) => value instanceof File || value instanceof FileList
 		);
 
-		console.log('🔍 API: Update has files:', hasFiles);
+		let requestPromise;
 
 		if (hasFiles) {
-			console.log('🔍 API: Using FormData for file upload');
 			const formData = new FormData();
 			Object.keys(data).forEach((key) => {
 				if (data[key] instanceof FileList) {
@@ -385,18 +383,24 @@ export const productAPI = {
 				}
 			});
 
-			return api.put(`/products/${id}`, formData, {
+			requestPromise = api.put(`/products/${id}`, formData, {
 				headers: { 'Content-Type': 'multipart/form-data' },
 			});
 		} else {
-			console.log('🔍 API: Using JSON for text-only update');
-			return api.put(`/products/${id}`, data, {
+			requestPromise = api.put(`/products/${id}`, data, {
 				headers: { 'Content-Type': 'application/json' },
 			});
 		}
+
+		return requestPromise.then((response) => {
+			// Clear relevant cache after update
+			apiCache.clearByPattern('/products');
+			apiCache.clearByPattern(`/products/${id}`);
+			return response;
+		});
 	},
 
-	// ✅ Delete product
+	// ✅ Delete product (clears cache after deletion)
 	delete: (id) => {
 		console.log('🔍 API: Deleting product:', id);
 		if (!id) {
@@ -408,6 +412,9 @@ export const productAPI = {
 			.delete(`/products/${id}`)
 			.then((response) => {
 				console.log('✅ API: Product deleted successfully:', response.data);
+				// Clear relevant cache after deletion
+				apiCache.clearByPattern('/products');
+				apiCache.clearByPattern(`/products/${id}`);
 				return response;
 			})
 			.catch((error) => {
@@ -416,93 +423,99 @@ export const productAPI = {
 			});
 	},
 
-	// ✅ Get vendor's products
+	// ✅ Get vendor's products (with caching)
 	getVendorProducts: (params = {}) => {
 		console.log('🔍 API: Getting vendor products with params:', params);
-		return api
-			.get('/products/vendor/my-products', { params })
-			.then((response) => {
-				console.log(
-					'✅ API: Vendor products retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting vendor products:', error);
-				throw error;
-			});
+		return apiCache.deduplicate('/products/vendor/my-products', params, () =>
+			api
+				.get('/products/vendor/my-products', { params })
+				.then((response) => {
+					console.log(
+						'✅ API: Vendor products retrieved successfully:',
+						response.data
+					);
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting vendor products:', error);
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Get vendor dashboard statistics
+	// ✅ Get vendor dashboard statistics (with caching)
 	getVendorDashboardStats: () => {
 		console.log('🔍 API: Getting vendor dashboard stats');
-		return api
-			.get('/products/vendor/dashboard-stats')
-			.then((response) => {
-				console.log(
-					'✅ API: Dashboard stats retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting dashboard stats:', error);
-				throw error;
-			});
+		return apiCache.deduplicate('/products/vendor/dashboard-stats', {}, () =>
+			api
+				.get('/products/vendor/dashboard-stats')
+				.then((response) => {
+					console.log(
+						'✅ API: Dashboard stats retrieved successfully:',
+						response.data
+					);
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting dashboard stats:', error);
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Get featured products
+	// ✅ Get featured products (with caching)
 	getFeatured: () => {
 		console.log('🔍 API: Getting featured products');
-		return api
-			.get('/products/featured')
-			.then((response) => {
-				console.log(
-					'✅ API: Featured products retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting featured products:', error);
-				// Return empty array if endpoint not implemented
-				if (error.response?.status === 404) {
+		return apiCache.deduplicate('/products/featured', {}, () =>
+			api
+				.get('/products/featured')
+				.then((response) => {
 					console.log(
-						'ℹ️ API: Featured products endpoint not implemented, returning empty array'
+						'✅ API: Featured products retrieved successfully:',
+						response.data
 					);
-					return { data: { products: [] } };
-				}
-				throw error;
-			});
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting featured products:', error);
+					if (error.response?.status === 404) {
+						console.log(
+							'ℹ️ API: Featured products endpoint not implemented, returning empty array'
+						);
+						return { data: { products: [] } };
+					}
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Get trending products
+	// ✅ Get trending products (with caching)
 	getTrending: () => {
 		console.log('🔍 API: Getting trending products');
-		return api
-			.get('/products/trending')
-			.then((response) => {
-				console.log(
-					'✅ API: Trending products retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting trending products:', error);
-				// Return empty array if endpoint not implemented
-				if (error.response?.status === 404) {
+		return apiCache.deduplicate('/products/trending', {}, () =>
+			api
+				.get('/products/trending')
+				.then((response) => {
 					console.log(
-						'ℹ️ API: Trending products endpoint not implemented, returning empty array'
+						'✅ API: Trending products retrieved successfully:',
+						response.data
 					);
-					return { data: { products: [] } };
-				}
-				throw error;
-			});
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting trending products:', error);
+					if (error.response?.status === 404) {
+						console.log(
+							'ℹ️ API: Trending products endpoint not implemented, returning empty array'
+						);
+						return { data: { products: [] } };
+					}
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Get similar products
+	// ✅ Get similar products (with caching)
 	getSimilar: (id) => {
 		console.log('🔍 API: Getting similar products for ID:', id);
 		if (!id) {
@@ -510,83 +523,90 @@ export const productAPI = {
 			throw new Error('Product ID is required for similar products');
 		}
 
-		return api
-			.get(`/products/${id}/similar`)
-			.then((response) => {
-				console.log(
-					'✅ API: Similar products retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting similar products:', error);
-				// Return empty array if endpoint not implemented
-				if (error.response?.status === 404) {
+		return apiCache.deduplicate(`/products/${id}/similar`, {}, () =>
+			api
+				.get(`/products/${id}/similar`)
+				.then((response) => {
 					console.log(
-						'ℹ️ API: Similar products endpoint not implemented, returning empty array'
+						'✅ API: Similar products retrieved successfully:',
+						response.data
 					);
-					return { data: { products: [] } };
-				}
-				throw error;
-			});
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting similar products:', error);
+					if (error.response?.status === 404) {
+						console.log(
+							'ℹ️ API: Similar products endpoint not implemented, returning empty array'
+						);
+						return { data: { products: [] } };
+					}
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Search products with advanced filtering
+	// ✅ Search products (with caching for same search terms)
 	search: (searchParams) => {
 		console.log('🔍 API: Searching products with params:', searchParams);
-		return api
-			.get('/products/search', { params: searchParams })
-			.then((response) => {
-				console.log(
-					'✅ API: Search results retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error searching products:', error);
-				throw error;
-			});
+		return apiCache.deduplicate('/products/search', searchParams, () =>
+			api
+				.get('/products/search', { params: searchParams })
+				.then((response) => {
+					console.log(
+						'✅ API: Search results retrieved successfully:',
+						response.data
+					);
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error searching products:', error);
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Get products by category
+	// ✅ Get products by category (with caching)
 	getByCategory: (category, params = {}) => {
 		console.log('🔍 API: Getting products by category:', category);
-		return api
-			.get('/products', { params: { category, ...params } })
-			.then((response) => {
-				console.log(
-					'✅ API: Category products retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting category products:', error);
-				throw error;
-			});
+		return apiCache.deduplicate('/products', { category, ...params }, () =>
+			api
+				.get('/products', { params: { category, ...params } })
+				.then((response) => {
+					console.log(
+						'✅ API: Category products retrieved successfully:',
+						response.data
+					);
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting category products:', error);
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Get products by vendor
+	// ✅ Get products by vendor (with caching)
 	getByVendor: (vendorId, params = {}) => {
 		console.log('🔍 API: Getting products by vendor:', vendorId);
-		return api
-			.get('/products', { params: { vendorId, ...params } })
-			.then((response) => {
-				console.log(
-					'✅ API: Vendor products retrieved successfully:',
-					response.data
-				);
-				return response;
-			})
-			.catch((error) => {
-				console.error('❌ API: Error getting vendor products:', error);
-				throw error;
-			});
+		return apiCache.deduplicate('/products', { vendorId, ...params }, () =>
+			api
+				.get('/products', { params: { vendorId, ...params } })
+				.then((response) => {
+					console.log(
+						'✅ API: Vendor products retrieved successfully:',
+						response.data
+					);
+					return response;
+				})
+				.catch((error) => {
+					console.error('❌ API: Error getting vendor products:', error);
+					throw error;
+				})
+		);
 	},
 
-	// ✅ Update product status
+	// ✅ Update product status (clears cache)
 	updateStatus: (id, status) => {
 		console.log('🔍 API: Updating product status:', id, status);
 		return api
@@ -596,6 +616,9 @@ export const productAPI = {
 					'✅ API: Product status updated successfully:',
 					response.data
 				);
+				// Clear relevant cache after status update
+				apiCache.clearByPattern('/products');
+				apiCache.clearByPattern(`/products/${id}`);
 				return response;
 			})
 			.catch((error) => {
@@ -604,7 +627,7 @@ export const productAPI = {
 			});
 	},
 
-	// ✅ Bulk operations
+	// ✅ Bulk operations (clear cache after operations)
 	bulkUpdate: (ids, updateData) => {
 		console.log('🔍 API: Bulk updating products:', ids);
 		return api
@@ -614,6 +637,8 @@ export const productAPI = {
 					'✅ API: Bulk update completed successfully:',
 					response.data
 				);
+				// Clear all products cache after bulk update
+				apiCache.clearByPattern('/products');
 				return response;
 			})
 			.catch((error) => {
@@ -631,6 +656,8 @@ export const productAPI = {
 					'✅ API: Bulk delete completed successfully:',
 					response.data
 				);
+				// Clear all products cache after bulk delete
+				apiCache.clearByPattern('/products');
 				return response;
 			})
 			.catch((error) => {
