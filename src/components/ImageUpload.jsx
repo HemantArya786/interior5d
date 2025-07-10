@@ -31,10 +31,11 @@ const ImageUpload = ({
 	const [dragActive, setDragActive] = useState(false);
 	const [uploading, setUploading] = useState(false);
 	const [imageUrl, setImageUrl] = useState(currentImage || '');
-	const [uploadMode, setUploadMode] = useState('url'); // 'url' or 'file'
+	const [uploadMode, setUploadMode] = useState('url');
 	const [preview, setPreview] = useState(currentImage || '');
 	const [uploadProgress, setUploadProgress] = useState(0);
 	const [error, setError] = useState('');
+	const [imageLoadError, setImageLoadError] = useState(false);
 	const fileInputRef = useRef(null);
 
 	// Update preview when currentImage changes
@@ -42,6 +43,7 @@ const ImageUpload = ({
 		if (currentImage !== preview) {
 			setPreview(currentImage || '');
 			setImageUrl(currentImage || '');
+			setImageLoadError(false);
 		}
 	}, [currentImage, preview]);
 
@@ -81,23 +83,31 @@ const ImageUpload = ({
 		[maxSize, type]
 	);
 
-	// ✅ Use backend upload API instead of direct Cloudinary
+	// ✅ Fixed backend upload with proper error handling
 	const uploadToBackend = useCallback(async (file) => {
 		try {
-			console.log('🔄 Uploading file to backend:', file.name);
+			console.log(
+				'🔄 Uploading file to backend:',
+				file.name,
+				file.size,
+				'bytes'
+			);
 
-			// Use the uploadAPI from your services
 			const response = await uploadAPI.uploadImage(file);
+			console.log('🔍 Upload response:', response.data);
 
 			// Handle response structure
 			let uploadedUrl;
-			if (response.data?.url) {
+			if (response.data?.success && response.data?.url) {
+				uploadedUrl = response.data.url;
+			} else if (response.data?.url) {
 				uploadedUrl = response.data.url;
 			} else if (response.data?.secure_url) {
 				uploadedUrl = response.data.secure_url;
 			} else if (typeof response.data === 'string') {
 				uploadedUrl = response.data;
 			} else {
+				console.error('❌ Invalid response structure:', response.data);
 				throw new Error('Invalid response from upload server');
 			}
 
@@ -105,10 +115,16 @@ const ImageUpload = ({
 			return uploadedUrl;
 		} catch (error) {
 			console.error('❌ Backend upload failed:', error);
-			throw new Error(
-				'Failed to upload image: ' +
-					(error.response?.data?.message || error.message)
-			);
+			console.error('❌ Error response:', error.response?.data);
+
+			let errorMessage = 'Failed to upload image';
+			if (error.response?.data?.message) {
+				errorMessage = error.response.data.message;
+			} else if (error.message) {
+				errorMessage = error.message;
+			}
+
+			throw new Error(errorMessage);
 		}
 	}, []);
 
@@ -118,6 +134,7 @@ const ImageUpload = ({
 				setError('');
 				setUploading(true);
 				setUploadProgress(0);
+				setImageLoadError(false);
 
 				// Validate file
 				await validateFile(file);
@@ -133,7 +150,7 @@ const ImageUpload = ({
 					});
 				}, 200);
 
-				// ✅ Upload using backend API
+				// Upload using backend API
 				const uploadedUrl = await uploadToBackend(file);
 
 				clearInterval(progressInterval);
@@ -211,6 +228,7 @@ const ImageUpload = ({
 		if (disabled) return;
 
 		setError('');
+		setImageLoadError(false);
 
 		if (!imageUrl.trim()) {
 			setError('Please enter a valid image URL');
@@ -231,9 +249,11 @@ const ImageUpload = ({
 			setPreview(imageUrl);
 			onImageChange(imageUrl);
 			setError('');
+			setImageLoadError(false);
 		};
 		img.onerror = () => {
 			setError('Could not load image from this URL');
+			setImageLoadError(true);
 		};
 		img.src = imageUrl;
 	}, [disabled, imageUrl, onImageChange]);
@@ -244,11 +264,18 @@ const ImageUpload = ({
 		setPreview('');
 		setImageUrl('');
 		setError('');
+		setImageLoadError(false);
 		onImageChange('');
 		if (fileInputRef.current) {
 			fileInputRef.current.value = '';
 		}
 	}, [disabled, onImageChange]);
+
+	// ✅ Fixed image error handler - don't show fallback image
+	const handleImageError = useCallback(() => {
+		setImageLoadError(true);
+		setError('Failed to load image. Please try uploading again.');
+	}, []);
 
 	return (
 		<div className={`space-y-4 ${className}`}>
@@ -294,6 +321,7 @@ const ImageUpload = ({
 						onChange={(e) => {
 							setImageUrl(e.target.value);
 							setError('');
+							setImageLoadError(false);
 						}}
 						className="w-full"
 						disabled={disabled}
@@ -320,7 +348,7 @@ const ImageUpload = ({
 					{uploading && (
 						<div className="mb-4 space-y-2">
 							<div className="flex justify-between text-sm">
-								<span>Uploading...</span>
+								<span>Uploading to server...</span>
 								<span>{uploadProgress}%</span>
 							</div>
 							<Progress value={uploadProgress} className="w-full" />
@@ -386,7 +414,7 @@ const ImageUpload = ({
 			)}
 
 			{/* Image Preview */}
-			{preview && (
+			{preview && !imageLoadError && (
 				<div className="relative">
 					<div className="relative group">
 						<img
@@ -395,11 +423,7 @@ const ImageUpload = ({
 							className={`w-full object-cover rounded-lg border ${
 								type === 'profile' ? 'h-40' : 'h-48'
 							}`}
-							onError={(e) => {
-								e.target.src =
-									'https://images.pexels.com/photos/3797991/pexels-photo-3797991.jpeg';
-								setError('Failed to load image');
-							}}
+							onError={handleImageError}
 						/>
 
 						{/* Image overlay with actions */}
@@ -445,6 +469,29 @@ const ImageUpload = ({
 						<p>✓ Image uploaded successfully</p>
 						<p>📁 Stored on server</p>
 					</div>
+				</div>
+			)}
+
+			{/* Show error state instead of broken image */}
+			{imageLoadError && (
+				<div className="relative">
+					<Card className="border-red-200 bg-red-50">
+						<CardContent className="flex flex-col items-center justify-center py-10">
+							<AlertCircle className="h-12 w-12 text-red-400 mb-2" />
+							<p className="text-sm text-red-600 text-center">
+								Failed to load image. Please try uploading again.
+							</p>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={clearImage}
+								className="mt-3">
+								<Trash2 className="h-4 w-4 mr-1" />
+								Clear and retry
+							</Button>
+						</CardContent>
+					</Card>
 				</div>
 			)}
 		</div>
